@@ -369,10 +369,12 @@ if(LEVELDB_BUILD_TESTS)
         "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
         "util/testutil.cc"
         "util/testutil.h"
-
+        "util/status_test.cc"
+        "util/no_destructor_test.cc"
+        
         "${test_file}"
     )
-    target_link_libraries("${test_target_name}" leveldb gmock gtest)
+    target_link_libraries("${test_target_name}" leveldb gmock gtest gtest_main)
     target_compile_definitions("${test_target_name}"
       PRIVATE
         ${LEVELDB_PLATFORM_NAME}=1
@@ -388,6 +390,13 @@ if(LEVELDB_BUILD_TESTS)
   endfunction(leveldb_test)
 
   leveldb_test("db/c_test.c")
+  #leveldb_test("${PROJECT_SOURCE_DIR}/table/table_test.cc")
+  leveldb_test("${PROJECT_SOURCE_DIR}/ken_test/ken_test.cpp")
+  #leveldb_test("table/table_test.cc")
+  leveldb_test("${PROJECT_SOURCE_DIR}/util/cache_test.cc")
+  if(NOT BUILD_SHARED_LIBS)
+    leveldb_test("${PROJECT_SOURCE_DIR}/table/table_test.cc")
+  endif(NOT BUILD_SHARED_LIBS)
 
   if(NOT BUILD_SHARED_LIBS)
     # TODO(costan): This test also uses

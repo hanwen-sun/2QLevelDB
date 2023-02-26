@@ -1298,7 +1298,7 @@ Compaction* VersionSet::PickCompaction() {
     assert(!c->inputs_[0].empty());
   }
 
-  SetupOtherInputs(c);
+  SetupOtherInputs(c);  // 找到上一层Level需要合并的文件;
 
   return c;
 }

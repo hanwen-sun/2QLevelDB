@@ -71,7 +71,7 @@ Status Writer::AddRecord(const Slice& slice) {
       type = kMiddleType;
     }
 
-    s = EmitPhysicalRecord(type, ptr, fragment_length);
+    s = EmitPhysicalRecord(type, ptr, fragment_length);   // 日志落盘;
     ptr += fragment_length;
     left -= fragment_length;
     begin = false;

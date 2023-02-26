@@ -68,6 +68,7 @@ TEST_F(CacheTest, HitAndMiss) {
   ASSERT_EQ(-1, Lookup(100));
 
   Insert(100, 101);
+  // Insert(100, 102);   测试相同key的hash值是否相同;
   ASSERT_EQ(101, Lookup(100));
   ASSERT_EQ(-1, Lookup(200));
   ASSERT_EQ(-1, Lookup(300));

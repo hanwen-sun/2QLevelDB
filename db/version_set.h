@@ -178,7 +178,7 @@ class VersionSet {
   // current version.  Will release *mu while actually writing to the file.
   // REQUIRES: *mu is held on entry.
   // REQUIRES: no other thread concurrently calls LogAndApply()
-  Status LogAndApply(VersionEdit* edit, port::Mutex* mu)
+  Status LogAndApply(VersionEdit* edit, port::Mutex* mu)   // 增量式版本变迁写入;
       EXCLUSIVE_LOCKS_REQUIRED(mu);
 
   // Recover the last saved descriptor from persistent storage.
@@ -272,7 +272,7 @@ class VersionSet {
  private:
   class Builder;
 
-  friend class Compaction;
+  friend class Compaction; 
   friend class Version;
 
   bool ReuseManifest(const std::string& dscname, const std::string& dscbase);
@@ -365,11 +365,12 @@ class Compaction {
 
   int level_;
   uint64_t max_output_file_size_;
-  Version* input_version_;
-  VersionEdit edit_;
+  Version* input_version_;    // Compaction时的Version;
+  VersionEdit edit_;     // Compact发生的Edit;
 
   // Each compaction reads inputs from "level_" and "level_+1"
   std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs
+  // level_ 和 level_ + 1 的需要Compact的文件集合, 注意是两个vector;
 
   // State used to check for number of overlapping grandparent files
   // (parent == level_ + 1, grandparent == level_ + 2)

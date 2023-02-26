@@ -19,7 +19,8 @@ namespace leveldb {
 
 inline uint32_t Block::NumRestarts() const {
   assert(size_ >= sizeof(uint32_t));
-  return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
+  return DecodeFixed32(data_ + size_ - sizeof(uint32_t));   // 特别注意, 这里的data_是首地址, data_ + size_ - siz
+                                                           // eof()就是拿最后四个字节, 与文档内容符合;
 }
 
 Block::Block(const BlockContents& contents)

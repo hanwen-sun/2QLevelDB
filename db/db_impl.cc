@@ -516,7 +516,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   Status s;
   {
     mutex_.Unlock();
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);  // 这里实际填充meta;
     mutex_.Lock();
   }
 
@@ -565,7 +565,7 @@ void DBImpl::CompactMemTable() {
   if (s.ok()) {
     edit.SetPrevLogNumber(0);
     edit.SetLogNumber(logfile_number_);  // Earlier logs no longer needed
-    s = versions_->LogAndApply(&edit, &mutex_);
+    s = versions_->LogAndApply(&edit, &mutex_); // 在这里flush落盘吗? 不懂; 
   }
 
   if (s.ok()) {
@@ -677,7 +677,7 @@ void DBImpl::MaybeScheduleCompaction() {
 }
 
 void DBImpl::BGWork(void* db) {
-  reinterpret_cast<DBImpl*>(db)->BackgroundCall();
+  reinterpret_cast<DBImpl*>(db)->BackgroundCall();   // 把void* 转换为 DBImpl* 然后调用;
 }
 
 void DBImpl::BackgroundCall() {
@@ -729,7 +729,7 @@ void DBImpl::BackgroundCompaction() {
   Status status;
   if (c == nullptr) {
     // Nothing to do
-  } else if (!is_manual && c->IsTrivialMove()) {
+  } else if (!is_manual && c->IsTrivialMove()) {   // 单纯移动level n的file 到level n + 1?
     // Move file to next level
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
@@ -906,7 +906,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   } else {
     compact->smallest_snapshot = snapshots_.oldest()->sequence_number();
   }
-
+  // 参与Compaction的SSTable组成一个迭代器;
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
 
   // Release mutex while we're actually doing the compaction work
@@ -914,11 +914,11 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
   input->SeekToFirst();
   Status status;
-  ParsedInternalKey ikey;
-  std::string current_user_key;
-  bool has_current_user_key = false;
+  ParsedInternalKey ikey; 
+  std::string current_user_key;       // 记录当前的userkey;
+  bool has_current_user_key = false;    // 记录是否碰到过相同的user_key;
   SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
-  while (input->Valid() && !shutting_down_.load(std::memory_order_acquire)) {
+  while (input->Valid() && !shutting_down_.load(std::memory_order_acquire)) {   // 遍历迭代器;
     // Prioritize immutable compaction work
     if (has_imm_.load(std::memory_order_relaxed)) {
       const uint64_t imm_start = env_->NowMicros();
@@ -1124,7 +1124,7 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     snapshot = versions_->LastSequence();
   }
 
-  MemTable* mem = mem_;
+  MemTable* mem = mem_;  // // mem是MemTable，imm是Immutable MemTable，
   MemTable* imm = imm_;
   Version* current = versions_->current();
   mem->Ref();

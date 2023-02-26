@@ -100,7 +100,7 @@ class SkipList {
   enum { kMaxHeight = 12 };
 
   inline int GetMaxHeight() const {
-    return max_height_.load(std::memory_order_relaxed);
+    return max_height_.load(std::memory_order_relaxed); 
   }
 
   Node* NewNode(const Key& key, int height);
@@ -181,7 +181,7 @@ typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::NewNode(
     const Key& key, int height) {
   char* const node_memory = arena_->AllocateAligned(
       sizeof(Node) + sizeof(std::atomic<Node*>) * (height - 1));
-  return new (node_memory) Node(key);
+  return new (node_memory) Node(key);   // 在获得了一块可以容纳指定对象的内存后, 在该内存空间上直接构造; placement new;
 }
 
 template <typename Key, class Comparator>
@@ -336,7 +336,7 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
   Node* prev[kMaxHeight];
-  Node* x = FindGreaterOrEqual(key, prev);
+  Node* x = FindGreaterOrEqual(key, prev);   // 找到对于x的每个level的要插入的前一个结点;
 
   // Our data structure does not allow duplicate insertion
   assert(x == nullptr || !Equal(key, x->key));

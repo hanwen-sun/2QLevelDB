@@ -77,26 +77,27 @@ class HandleTable {
   }
 
   LRUHandle* Insert(LRUHandle* h) {
-    LRUHandle** ptr = FindPointer(h->key(), h->hash);
-    LRUHandle* old = *ptr;
-    h->next_hash = (old == nullptr ? nullptr : old->next_hash);
-    *ptr = h;
-    if (old == nullptr) {
+    LRUHandle** ptr = FindPointer(h->key(), h->hash);   // 这里是找到指向相同hash的ptr, 即对应的bucket;
+    // 如果bucket中有与插入的h key与hash相同的元素, 则指向该元素, 否则指向bucket的末尾;
+    LRUHandle* old = *ptr;                     
+    h->next_hash = (old == nullptr ? nullptr : old->next_hash);  // h->next = old->next;
+    *ptr = h;  // 直接让最新的h覆盖原来的old, 即在内存中相同的key只会有一份数据;
+    if (old == nullptr) {   //  如果该bucket第一次插入值, 那么elems++(表示当前有多少个bukcet中实际有值);
       ++elems_;
-      if (elems_ > length_) {
+      if (elems_ > length_) {     // 如果elems > lenghth_, 表示超过阈值, 为了保持查询效率, 需要resize扩大hash;
         // Since each cache entry is fairly large, we aim for a small
         // average linked list length (<= 1).
         Resize();
       }
     }
-    return old;
+    return old;    // 返回该bucket中
   }
 
   LRUHandle* Remove(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = FindPointer(key, hash);
     LRUHandle* result = *ptr;
     if (result != nullptr) {
-      *ptr = result->next_hash;
+      *ptr = result->next_hash;  // 直接删除
       --elems_;
     }
     return result;
@@ -113,9 +114,9 @@ class HandleTable {
   // matches key/hash.  If there is no such cache entry, return a
   // pointer to the trailing slot in the corresponding linked list.
   LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
-    LRUHandle** ptr = &list_[hash & (length_ - 1)];
+    LRUHandle** ptr = &list_[hash & (length_ - 1)];   // 找到对应的bucket;
     while (*ptr != nullptr && ((*ptr)->hash != hash || key != (*ptr)->key())) {
-      ptr = &(*ptr)->next_hash;
+      ptr = &(*ptr)->next_hash;   // next_hash? 单个bucket之间的遍历;
     }
     return ptr;
   }
@@ -286,7 +287,7 @@ Cache::Handle* LRUCache::Insert(const Slice& key, uint32_t hash, void* value,
     e->in_cache = true;
     LRU_Append(&in_use_, e);
     usage_ += charge;
-    FinishErase(table_.Insert(e));
+    FinishErase(table_.Insert(e));   // Table的insert实际在这!!!
   } else {  // don't cache. (capacity_==0 is supported and turns off caching.)
     // next is read by key() in an assert, so it must be initialized
     e->next = nullptr;
@@ -316,9 +317,10 @@ bool LRUCache::FinishErase(LRUHandle* e) {
   return e != nullptr;
 }
 
+// 先在Table中删除, 再在LRU中删除;
 void LRUCache::Erase(const Slice& key, uint32_t hash) {
-  MutexLock l(&mutex_);
-  FinishErase(table_.Remove(key, hash));
+  MutexLock l(&mutex_);   
+  FinishErase(table_.Remove(key, hash));   // 如果 key/hash存在, 则FinishErase(非NULL)
 }
 
 void LRUCache::Prune() {

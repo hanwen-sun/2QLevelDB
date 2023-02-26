@@ -98,7 +98,9 @@ class VersionEdit {
 
   std::vector<std::pair<int, InternalKey>> compact_pointers_;
   DeletedFileSet deleted_files_;
+  // // 有哪些文件被删除，就是Version里哪些SSTable被删除
   std::vector<std::pair<int, FileMetaData>> new_files_;
+  // // 有哪些文件被增加，pair的第一个参数是Level，第二个参数是文件的元信息
 };
 
 }  // namespace leveldb
