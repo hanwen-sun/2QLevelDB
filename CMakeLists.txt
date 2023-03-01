@@ -394,6 +394,7 @@ if(LEVELDB_BUILD_TESTS)
   leveldb_test("${PROJECT_SOURCE_DIR}/ken_test/ken_test.cpp")
   #leveldb_test("table/table_test.cc")
   leveldb_test("${PROJECT_SOURCE_DIR}/util/cache_test.cc")
+  leveldb_test("db/skiplist_test.cc")
 
   leveldb_test("table/memtable_test.cc")
   if(NOT BUILD_SHARED_LIBS)

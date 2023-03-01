@@ -48,6 +48,7 @@ TEST(SkipTest, Empty) {
   ASSERT_TRUE(!iter.Valid());
 }
 
+// 这里可以直接测Memtable!!
 TEST(SkipTest, InsertAndLookup) {
   const int N = 2000;
   const int R = 5000;

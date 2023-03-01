@@ -57,6 +57,8 @@ class SkipList {
   // Returns true iff an entry that compares equal to key is in the list.
   bool Contains(const Key& key) const;
 
+  class FIFO;
+
   // Iteration over the contents of a skip list
   class Iterator {
    public:
@@ -135,6 +137,7 @@ class SkipList {
   // values are ok.
   std::atomic<int> max_height_;  // Height of the entire list
 
+  FIFO* FIFO_;
   // Read/written only by Insert().
   Random rnd_;
 };
@@ -183,6 +186,117 @@ typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::NewNode(
       sizeof(Node) + sizeof(std::atomic<Node*>) * (height - 1));
   return new (node_memory) Node(key);   // 在获得了一块可以容纳指定对象的内存后, 在该内存空间上直接构造; placement new;
 }
+
+// FIFO部分函数功能:
+template <typename Key, class Comparator>
+class SkipList<Key, Comparator>::FIFO {
+ public:
+   explicit FIFO();
+
+   void Insert(Node* x);
+
+   size_t Hot_MemoryUsage() const;
+
+   size_t Cold_MemoryUsage() const;
+
+   // void FreezeNode(int r);
+
+   class FIFO_Iterator {
+      public:
+         // Initialize an iterator over the specified list.
+    // The returned iterator is not valid.
+    explicit FIFO_Iterator(const SkipList* list);
+
+    // Returns true iff the iterator is positioned at a valid node.
+    bool Valid() const;
+
+    // Returns the key at the current position.
+    // REQUIRES: Valid()
+    const Key& key() const;
+
+    // Advances to the next position.
+    // REQUIRES: Valid()
+    void Next();
+
+    // Advances to the previous position.
+    // REQUIRES: Valid()
+    void Prev();
+
+    // Advance to the first entry with a key >= target
+    void Seek(const Key& target);
+
+    // Position at the first entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    void SeekToFirst();
+
+    // Position at the last entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    void SeekToLast();
+      
+      private:
+         // const FIFO* list_;
+         const SkipList* list_;
+         Node* node_;
+   };
+
+   private:
+      // SkipList* list_;
+      Node* normal_head_;           //  实际上是normal_head;  the oldest hot node;
+      Node* cold_head_;      // 初始化为nullptr;  the oldest cold node, also the oldest of the whole node;
+      Node* cur_node_;    // the newest node;
+
+      int hot_mem;
+      int cold_mem;
+};
+
+template <typename Key, class Comparator>
+SkipList<Key, Comparator>::FIFO::FIFO() {
+  normal_head_ = nullptr;
+  cold_head_ = nullptr;
+  cur_node_ = nullptr;
+  
+  hot_mem = 0;
+  cold_mem = 0;
+}
+
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::FIFO::Insert(SkipList<Key, Comparator>::Node* x) {
+
+}
+
+template <typename Key, class Comparator>
+size_t SkipList<Key, Comparator>::FIFO::Hot_MemoryUsage() const {
+  return 0;
+}
+
+template <typename Key, class Comparator>
+size_t SkipList<Key, Comparator>::FIFO::Cold_MemoryUsage() const {
+  return 0;
+}
+
+template <typename Key, class Comparator>
+inline SkipList<Key, Comparator>::FIFO::FIFO_Iterator::FIFO_Iterator(const SkipList* list) {
+  list_ = list;
+  node_ = nullptr;
+}
+
+template <typename Key, class Comparator>
+inline bool SkipList<Key, Comparator>::FIFO::FIFO_Iterator::Valid() const {
+  return node_ != nullptr;
+}
+
+template <typename Key, class Comparator>
+inline const Key& SkipList<Key, Comparator>::FIFO::FIFO_Iterator::key() const {
+  assert(Valid());
+  return node_->key;
+}
+
+template <typename Key, class Comparator>
+inline void SkipList<Key, Comparator>::FIFO::FIFO_Iterator::Next() {
+  assert(Valid());
+  // to_do: Next_FIFO();
+}
+
 
 template <typename Key, class Comparator>
 inline SkipList<Key, Comparator>::Iterator::Iterator(const SkipList* list) {
