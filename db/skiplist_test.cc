@@ -59,6 +59,7 @@ TEST(SkipTest, InsertAndLookup) {
   SkipList<Key, Comparator> list(cmp, &arena);
   for (int i = 0; i < N; i++) {
     Key key = rnd.Next() % R;
+    //fprintf(stderr, "%zu\n", key);
     if (keys.insert(key).second) {
       list.Insert(key);
     }

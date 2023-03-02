@@ -30,6 +30,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstdlib>
+#include <cstdio>
 
 #include "util/arena.h"
 #include "util/random.h"
@@ -187,7 +188,7 @@ struct SkipList<Key, Comparator>::Node {
   }
 
   void NoBarrier_Set_FIFO_Next(Node* x) {
-    next_.store(x, std::memory_order_relaxed);
+    FIFO_next.store(x, std::memory_order_relaxed);
   }
 
   Node* FIFO_Prev() {
@@ -202,15 +203,15 @@ struct SkipList<Key, Comparator>::Node {
     return FIFO_prev.load(std::memory_order_relaxed);
   }
 
-  Node* NoBarrier_Set_FIFO_Prev(Node* x) {
+  void NoBarrier_Set_FIFO_Prev(Node* x) {
     return FIFO_prev.store(x, std::memory_order_relaxed);
   }
 
  private:
   // Array of length equal to the node height.  next_[0] is lowest level link.
+  std::atomic<Node*> FIFO_next;  // 考虑到node的构建方式, next_[1]应该放在最后;
+  std::atomic<Node*> FIFO_prev;  // 由于每个node的层数是不确定的, 所以这里初始化为next_[1], 在构造函数中实际指定层数;
   std::atomic<Node*> next_[1];
-  std::atomic<Node*> FIFO_next;
-  std::atomic<Node*> FIFO_prev;
 };
 
 template <typename Key, class Comparator>
@@ -294,18 +295,29 @@ SkipList<Key, Comparator>::FIFO::FIFO() {
 }
 
 template <typename Key, class Comparator>
-void SkipList<Key, Comparator>::FIFO::Insert(SkipList<Key, Comparator>::Node* x) {
+void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
+  //fprintf(stderr, "%s\n", "FIFO Insert Begin");
+  if(normal_head_ == nullptr) {
+      normal_head_ = x;
+      cur_node_ = x;
+      return;
+   }
 
+  cur_node_->Set_FIFO_Next(x);
+  x->NoBarrier_Set_FIFO_Prev(cur_node_);  // 完成双向链表构建;
+
+  cur_node_ = cur_node_->FIFO_Next();
+  //fprintf(stderr, "%s\n", "FIFO Insert End!");
 }
 
 template <typename Key, class Comparator>
 size_t SkipList<Key, Comparator>::FIFO::Hot_MemoryUsage() const {
-  return 0;
+  return hot_mem;
 }
 
 template <typename Key, class Comparator>
 size_t SkipList<Key, Comparator>::FIFO::Cold_MemoryUsage() const {
-  return 0;
+  return cold_mem;
 }
 
 template <typename Key, class Comparator>
@@ -335,7 +347,7 @@ template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::FIFO::FIFO_Iterator::Prev() {
   assert(Valid());
   // to_do: ;
-  
+  node_ = node_->FIFO_Prev();
 }
 
 template <typename Key, class Comparator>
@@ -434,13 +446,16 @@ template <typename Key, class Comparator>
 typename SkipList<Key, Comparator>::Node*
 SkipList<Key, Comparator>::FindGreaterOrEqual(const Key& key,
                                               Node** prev) const {
+  //fprintf(stderr, "%d\n", 1);
   Node* x = head_;
   int level = GetMaxHeight() - 1;
   while (true) {
+    // //fprintf(stderr, "%d\n", x->key());
     Node* next = x->Next(level);
     if (KeyIsAfterNode(key, next)) {
       // Keep searching in this list
       x = next;
+      // //fprintf(stderr, "%d\n", 4);
     } else {
       if (prev != nullptr) prev[level] = x;
       if (level == 0) {
@@ -449,6 +464,7 @@ SkipList<Key, Comparator>::FindGreaterOrEqual(const Key& key,
         // Switch to next list
         level--;
       }
+      // //fprintf(stderr, "%d\n", 5);
     }
   }
 }
@@ -501,6 +517,7 @@ SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
       head_(NewNode(0 /* any key will do */, kMaxHeight)),
       max_height_(1),
       rnd_(0xdeadbeef) {
+  FIFO_ = new FIFO;
   for (int i = 0; i < kMaxHeight; i++) {
     head_->SetNext(i, nullptr);
   }
@@ -510,9 +527,10 @@ template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::Insert(const Key& key) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
+  //fprintf(stderr, "%s\n", "SkipList Insert Begin!");
   Node* prev[kMaxHeight];
   Node* x = FindGreaterOrEqual(key, prev);   // 找到对于x的每个level的要插入的前一个结点;
-
+  //fprintf(stderr, "%d\n", 2);
   // Our data structure does not allow duplicate insertion
   assert(x == nullptr || !Equal(key, x->key));
 
@@ -538,6 +556,9 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
     x->NoBarrier_SetNext(i, prev[i]->NoBarrier_Next(i));
     prev[i]->SetNext(i, x);
   }
+
+  FIFO_->Insert(x);
+  // //fprintf(stderr, "%s\n", "SkipList Insert Done!");
 }
 
 template <typename Key, class Comparator>
