@@ -48,6 +48,23 @@ TEST(SkipTest, Empty) {
   ASSERT_TRUE(!iter.Valid());
 }
 
+
+TEST(FIFOTest, Empty) {
+  Arena arena;
+  Comparator cmp;
+  SkipList<Key, Comparator> list(cmp, &arena);
+  ASSERT_TRUE(!list.Contains(10));
+
+  SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
+  ASSERT_TRUE(!iter.Valid());
+  iter.SeekToFirst();
+  ASSERT_TRUE(!iter.Valid());
+  iter.Seek(100);
+  ASSERT_TRUE(!iter.Valid());
+  iter.SeekToLast();
+  ASSERT_TRUE(!iter.Valid());
+}
+
 // 这里可以直接测Memtable!!
 TEST(SkipTest, InsertAndLookup) {
   const int N = 2000;
@@ -126,6 +143,92 @@ TEST(SkipTest, InsertAndLookup) {
     ASSERT_TRUE(!iter.Valid());
   }
 }
+
+TEST(FIFOTest, InsertAndLookup) {
+  const int N = 2000;
+  const int R = 5000;
+  Random rnd(1000);
+  std::set<Key> keys;
+  Arena arena;
+  Comparator cmp;
+  SkipList<Key, Comparator> list(cmp, &arena);
+  for (int i = 0; i < N; i++) {
+    Key key = rnd.Next() % R;
+    //fprintf(stderr, "%zu\n", key);
+    if (keys.insert(key).second) {
+      list.Insert(key);
+    }
+  }
+  
+  for (int i = 0; i < N; i++) {
+    Key key = rnd.Next() % R;
+    //fprintf(stderr, "%zu\n", key);
+    if (keys.insert(key).second) {
+      list.Insert(key);
+    }
+  }
+
+  // Simple iterator tests
+  {
+    SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
+    ASSERT_TRUE(!iter.Valid());
+
+    iter.Seek(0);
+    ASSERT_TRUE(iter.Valid());
+    ASSERT_EQ(*(keys.begin()), iter.key());
+
+    iter.SeekToFirst();
+    ASSERT_TRUE(iter.Valid());
+    ASSERT_EQ(*(keys.begin()), iter.key());
+
+    iter.SeekToLast();
+    ASSERT_TRUE(iter.Valid());
+    ASSERT_EQ(*(keys.rbegin()), iter.key());
+  }
+
+  // Forward iteration test
+  for (int i = 0; i < R; i++) {
+    SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
+    iter.Seek(i);
+
+    // Compare against model iterator
+    std::set<Key>::iterator model_iter = keys.lower_bound(i);
+    for (int j = 0; j < 3; j++) {
+      if (model_iter == keys.end()) {
+        ASSERT_TRUE(!iter.Valid());
+        break;
+      } else {
+        ASSERT_TRUE(iter.Valid());
+        ASSERT_EQ(*model_iter, iter.key());
+        ++model_iter;
+        iter.Next();
+      }
+    }
+  }
+
+  // Backward iteration test
+  {
+    SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
+    iter.SeekToLast();
+
+    // Compare against model iterator
+    for (std::set<Key>::reverse_iterator model_iter = keys.rbegin();
+         model_iter != keys.rend(); ++model_iter) {
+      ASSERT_TRUE(iter.Valid());
+      ASSERT_EQ(*model_iter, iter.key());
+      iter.Prev();
+    }
+    ASSERT_TRUE(!iter.Valid());
+  }
+}
+
+
+
+
+
+
+
+
 
 // We want to make sure that with a single writer and multiple
 // concurrent readers (with no synchronization other than when a

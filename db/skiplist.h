@@ -297,6 +297,7 @@ SkipList<Key, Comparator>::FIFO::FIFO() {
 template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
   //fprintf(stderr, "%s\n", "FIFO Insert Begin");
+  // FreezeNode();
   if(normal_head_ == nullptr) {
       normal_head_ = x;
       cur_node_ = x;
@@ -307,6 +308,7 @@ void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
   x->NoBarrier_Set_FIFO_Prev(cur_node_);  // 完成双向链表构建;
 
   cur_node_ = cur_node_->FIFO_Next();
+  //fprintf(stderr, "%zu\n", normal_head_->key);
   //fprintf(stderr, "%s\n", "FIFO Insert End!");
 }
 
