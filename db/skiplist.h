@@ -146,7 +146,10 @@ class SkipList {
 // Implementation details follow
 template <typename Key, class Comparator>
 struct SkipList<Key, Comparator>::Node {
-  explicit Node(const Key& k) : key(k) {}
+  explicit Node(const Key& k) : key(k) {
+    FIFO_next = nullptr;
+    FIFO_prev = nullptr;
+  }
 
   Key const key;
 

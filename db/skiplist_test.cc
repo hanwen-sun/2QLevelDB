@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <set>
+#include <unordered_set>
 
 #include "gtest/gtest.h"
 #include "leveldb/env.h"
@@ -149,6 +150,7 @@ TEST(FIFOTest, InsertAndLookup) {
   const int R = 5000;
   Random rnd(1000);
   std::set<Key> keys;
+  std::vector<Key> keys_;
   Arena arena;
   Comparator cmp;
   SkipList<Key, Comparator> list(cmp, &arena);
@@ -157,6 +159,7 @@ TEST(FIFOTest, InsertAndLookup) {
     //fprintf(stderr, "%zu\n", key);
     if (keys.insert(key).second) {
       list.Insert(key);
+      keys_.emplace_back(key);
     }
   }
   
@@ -165,9 +168,11 @@ TEST(FIFOTest, InsertAndLookup) {
     //fprintf(stderr, "%zu\n", key);
     if (keys.insert(key).second) {
       list.Insert(key);
+      keys_.emplace_back(key);
     }
   }
 
+  //fprintf(stderr, "%zu %zu\n", keys_.size(), keys.size());
   // Simple iterator tests
   {
     SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
@@ -179,53 +184,48 @@ TEST(FIFOTest, InsertAndLookup) {
 
     iter.SeekToFirst();
     ASSERT_TRUE(iter.Valid());
-    ASSERT_EQ(*(keys.begin()), iter.key());
+    //fprintf(stderr, "%zu\n", iter.key());
+    ASSERT_EQ(*(keys_.begin()), iter.key());
 
     iter.SeekToLast();
     ASSERT_TRUE(iter.Valid());
-    ASSERT_EQ(*(keys.rbegin()), iter.key());
+    // fprintf(stderr, "%zu\n", iter.key());
+    ASSERT_EQ(*(keys_.rbegin()), iter.key());
   }
 
   // Forward iteration test
-  for (int i = 0; i < R; i++) {
+  {
     SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
-    iter.Seek(i);
+    ASSERT_TRUE(!iter.Valid());
+    iter.SeekToFirst();
 
-    // Compare against model iterator
-    std::set<Key>::iterator model_iter = keys.lower_bound(i);
-    for (int j = 0; j < 3; j++) {
-      if (model_iter == keys.end()) {
-        ASSERT_TRUE(!iter.Valid());
-        break;
-      } else {
-        ASSERT_TRUE(iter.Valid());
-        ASSERT_EQ(*model_iter, iter.key());
-        ++model_iter;
-        iter.Next();
-      }
+    for(const auto &it : keys_) {
+      ASSERT_EQ(it, iter.key());
+      iter.Next();
     }
+    ASSERT_TRUE(!iter.Valid());
   }
+  
 
   // Backward iteration test
   {
     SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
+    ASSERT_TRUE(!iter.Valid());
     iter.SeekToLast();
 
-    // Compare against model iterator
-    for (std::set<Key>::reverse_iterator model_iter = keys.rbegin();
-         model_iter != keys.rend(); ++model_iter) {
-      ASSERT_TRUE(iter.Valid());
-      ASSERT_EQ(*model_iter, iter.key());
+    auto it = keys_.rbegin();
+    //size_t cnt = 0;
+    while(it != keys_.rend()) {
+      // fprintf(stderr, "%zu\n", iter.key());
+      ASSERT_EQ(*it, iter.key());
       iter.Prev();
+      it++;
+      //cnt++;
     }
+
     ASSERT_TRUE(!iter.Valid());
   }
 }
-
-
-
-
-
 
 
 
