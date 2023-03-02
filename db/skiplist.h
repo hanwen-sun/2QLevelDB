@@ -174,9 +174,43 @@ struct SkipList<Key, Comparator>::Node {
     next_[n].store(x, std::memory_order_relaxed);
   }
 
+  Node* FIFO_Next() {
+    return FIFO_next.load(std::memory_order_acquire);
+  }
+
+  void Set_FIFO_Next(Node* x) {
+    FIFO_next.store(x, std::memory_order_acquire);
+  }
+
+  Node* NoBarrier_FIFO_Next() {
+    return FIFO_next.load(std::memory_order_relaxed);
+  }
+
+  void NoBarrier_Set_FIFO_Next(Node* x) {
+    next_.store(x, std::memory_order_relaxed);
+  }
+
+  Node* FIFO_Prev() {
+    return FIFO_prev.load(std::memory_order_acquire);
+  }
+
+  void Set_FIFO_Prev(Node* x) {
+    FIFO_prev.store(x, std::memory_order_acquire);
+  }
+
+  Node* NoBarrier_FIFO_Prev() {
+    return FIFO_prev.load(std::memory_order_relaxed);
+  }
+
+  Node* NoBarrier_Set_FIFO_Prev(Node* x) {
+    return FIFO_prev.store(x, std::memory_order_relaxed);
+  }
+
  private:
   // Array of length equal to the node height.  next_[0] is lowest level link.
   std::atomic<Node*> next_[1];
+  std::atomic<Node*> FIFO_next;
+  std::atomic<Node*> FIFO_prev;
 };
 
 template <typename Key, class Comparator>
@@ -294,8 +328,35 @@ inline const Key& SkipList<Key, Comparator>::FIFO::FIFO_Iterator::key() const {
 template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::FIFO::FIFO_Iterator::Next() {
   assert(Valid());
-  // to_do: Next_FIFO();
+  node_ = node_->FIFO_Next();
 }
+
+template <typename Key, class Comparator>
+inline void SkipList<Key, Comparator>::FIFO::FIFO_Iterator::Prev() {
+  assert(Valid());
+  // to_do: ;
+  
+}
+
+template <typename Key, class Comparator>
+inline void SkipList<Key, Comparator>::FIFO::FIFO_Iterator::Seek(const Key& target) {
+  node_ = list_->FindGreaterOrEqual(target, nullptr);
+}
+
+template <typename Key, class Comparator>
+inline void SkipList<Key, Comparator>::FIFO::FIFO_Iterator::SeekToFirst() {
+  if(list_->FIFO_->cold_head_ == nullptr)
+      node_ = list_->FIFO_->normal_head_;
+  else
+      node_ = list_->FIFO_->cold_head_;
+}
+
+template <typename Key, class Comparator>
+inline void SkipList<Key, Comparator>::FIFO::FIFO_Iterator::SeekToLast() {
+  node_ = list_->FIFO_->cur_node_;
+}
+
+
 
 
 template <typename Key, class Comparator>
