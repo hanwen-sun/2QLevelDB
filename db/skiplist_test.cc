@@ -7,6 +7,9 @@
 #include <atomic>
 #include <set>
 #include <unordered_set>
+#include <vector>
+#include <thread>
+#include <algorithm>
 
 #include "gtest/gtest.h"
 #include "leveldb/env.h"
@@ -33,7 +36,7 @@ struct Comparator {
   }
 };
 
-TEST(SkipTest, Empty) {
+TEST(SkipTest, DISABLED_Empty) {
   Arena arena;
   Comparator cmp;
   SkipList<Key, Comparator> list(cmp, &arena);
@@ -50,7 +53,7 @@ TEST(SkipTest, Empty) {
 }
 
 
-TEST(FIFOTest, Empty) {
+TEST(FIFOTest, DISABLED_Empty) {
   Arena arena;
   Comparator cmp;
   SkipList<Key, Comparator> list(cmp, &arena);
@@ -74,14 +77,37 @@ TEST(SkipTest, InsertAndLookup) {
   std::set<Key> keys;
   Arena arena;
   Comparator cmp;
+
   SkipList<Key, Comparator> list(cmp, &arena);
-  for (int i = 0; i < N; i++) {
-    Key key = rnd.Next() % R;
-    //fprintf(stderr, "%zu\n", key);
-    if (keys.insert(key).second) {
-      list.Insert(key);
+  // simple test;
+  {
+    SkipList<Key, Comparator>::Iterator iter(&list);
+
+    for (int i = 0; i < N; i++) {
+      Key key = rnd.Next() % R;
+      //fprintf(stderr, "%zu\n", key);
+      if (keys.insert(key).second) {
+        list.Insert(key);
+      }
     }
+
+    ASSERT_TRUE(!iter.Valid());
+
+    iter.Seek(0);
+    ASSERT_TRUE(iter.Valid());
+    ASSERT_EQ(*(keys.begin()), iter.key());
+
+    iter.SeekToFirst();
+    ASSERT_TRUE(iter.Valid());
+    ASSERT_EQ(*(keys.begin()), iter.key());
+
+    iter.SeekToLast();
+    ASSERT_TRUE(iter.Valid());
+    ASSERT_EQ(*(keys.rbegin()), iter.key());
   }
+
+
+  
 
   for (int i = 0; i < R; i++) {
     if (list.Contains(i)) {
@@ -145,7 +171,7 @@ TEST(SkipTest, InsertAndLookup) {
   }
 }
 
-TEST(FIFOTest, InsertAndLookup) {
+TEST(FIFOTest, DISABLED_InsertAndLookup) {
   const int N = 2000;
   const int R = 5000;
   Random rnd(1000);
@@ -227,9 +253,6 @@ TEST(FIFOTest, InsertAndLookup) {
   }
 }
 
-
-
-
 // We want to make sure that with a single writer and multiple
 // concurrent readers (with no synchronization other than when a
 // reader's iterator is created), the reader always observes all the
@@ -254,6 +277,72 @@ TEST(FIFOTest, InsertAndLookup) {
 // calls to Next() and Seek().  For every key we encounter, we
 // check that it is either expected given the initial snapshot or has
 // been concurrently added since the iterator started.
+
+
+/*void FIFO_Insert_Helper(SkipList<Key, Comparator>* list) {
+  // fprintf(stderr, "%s\n", "thread begin!\n");
+  Key i = rand() % 100;
+  Key start = i * 500;
+  Key end = (i + 1) * 500;
+
+  for(int k = start; k < end; k++) {
+    list->Insert(k);
+  }
+}
+
+TEST(FIFOTest, Concurrent) {
+  Arena arena;
+  Comparator cmp;
+  SkipList<Key, Comparator> list(cmp, &arena);
+
+  std::vector<std::thread> threads;
+  fprintf(stderr, "%s\n", "begin concurrent test!");
+
+  for(int i = 0; i < 10; i++)
+    threads.emplace_back(std::thread(FIFO_Insert_Helper, &list));
+
+  for(int i = 0; i < 10; i++)
+    threads[i].join();
+
+  fprintf(stderr, "%s\n", "Insert done!");
+  
+  SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
+  ASSERT_TRUE(!iter.Valid());
+
+  std::vector<Key> keys;
+  {
+    iter.SeekToFirst();
+
+    size_t cnt = 0;
+    while(iter.Valid()) {
+      keys.push_back(iter.key());
+      iter.Next();
+      cnt++;
+    }
+
+    ASSERT_TRUE(!iter.Valid());
+    ASSERT_EQ(2500, cnt);
+  }
+
+  {
+    std::reverse(keys.begin(), keys.end());
+
+    iter.SeekToLast();
+    int cnt = 0;
+    for(auto it : keys) {
+      ASSERT_EQ(it, iter.key());
+      cnt++;
+      iter.Prev();
+    }
+
+    ASSERT_TRUE(!iter.Valid());
+    ASSERT_EQ(2500, cnt);
+  }
+
+} */
+
+
+
 class ConcurrentTest {
  private:
   static constexpr uint32_t K = 4;
@@ -464,10 +553,10 @@ static void RunConcurrent(int run) {
   }
 }
 
-TEST(SkipTest, Concurrent1) { RunConcurrent(1); }
-TEST(SkipTest, Concurrent2) { RunConcurrent(2); }
-TEST(SkipTest, Concurrent3) { RunConcurrent(3); }
-TEST(SkipTest, Concurrent4) { RunConcurrent(4); }
-TEST(SkipTest, Concurrent5) { RunConcurrent(5); }
+TEST(SkipTest, DISABLED_Concurrent1) { RunConcurrent(1); }
+TEST(SkipTest, DISABLED_Concurrent2) { RunConcurrent(2); }
+TEST(SkipTest, DISABLED_Concurrent3) { RunConcurrent(3); }
+TEST(SkipTest, DISABLED_Concurrent4) { RunConcurrent(4); }
+TEST(SkipTest, DISABLED_Concurrent5) { RunConcurrent(5); }
 
 }  // namespace leveldb

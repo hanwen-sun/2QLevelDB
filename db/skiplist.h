@@ -307,8 +307,8 @@ void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
       return;
    }
 
-  cur_node_->Set_FIFO_Next(x);
   x->NoBarrier_Set_FIFO_Prev(cur_node_);  // 完成双向链表构建;
+  cur_node_->Set_FIFO_Next(x);
 
   cur_node_ = cur_node_->FIFO_Next();
   //fprintf(stderr, "%zu\n", normal_head_->key);
@@ -532,7 +532,7 @@ template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::Insert(const Key& key) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
-  //fprintf(stderr, "%s\n", "SkipList Insert Begin!");
+  // fprintf(stderr, "%s\n", "SkipList Insert Begin!");
   Node* prev[kMaxHeight];
   Node* x = FindGreaterOrEqual(key, prev);   // 找到对于x的每个level的要插入的前一个结点;
   //fprintf(stderr, "%d\n", 2);
@@ -563,7 +563,7 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
   }
 
   FIFO_->Insert(x);
-  // //fprintf(stderr, "%s\n", "SkipList Insert Done!");
+  //fprintf(stderr, "%s\n", "SkipList Insert Done!");
 }
 
 template <typename Key, class Comparator>
