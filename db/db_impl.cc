@@ -439,7 +439,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
 
     if (mem == nullptr) {
       mem = new MemTable(internal_comparator_);
-      mem->Ref();
+      mem->Ref(); 
     }
     status = WriteBatchInternal::InsertInto(&batch, mem);
     MaybeIgnoreError(&status);
@@ -1500,6 +1500,8 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
       impl->logfile_ = lfile;
       impl->logfile_number_ = new_log_number;
       impl->log_ = new log::Writer(lfile);
+      size_t threshold = options.hot_factor * options.write_buffer_size;;
+
       impl->mem_ = new MemTable(impl->internal_comparator_);
       impl->mem_->Ref();
     }

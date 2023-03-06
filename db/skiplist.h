@@ -53,7 +53,7 @@ class SkipList {
 
   // Insert key into the list.
   // REQUIRES: nothing that compares equal to key is currently in the list.
-  void Insert(const Key& key);
+  void Insert(const Key& key, size_t Size);
 
   // Returns true iff an entry that compares equal to key is in the list.
   bool Contains(const Key& key) const;
@@ -106,7 +106,7 @@ class SkipList {
     return max_height_.load(std::memory_order_relaxed); 
   }
 
-  Node* NewNode(const Key& key, int height);
+  Node* NewNode(const Key& key, int height, size_t Size);
   int RandomHeight();
   bool Equal(const Key& a, const Key& b) const { return (compare_(a, b) == 0); }
 
@@ -146,9 +146,10 @@ class SkipList {
 // Implementation details follow
 template <typename Key, class Comparator>
 struct SkipList<Key, Comparator>::Node {
-  explicit Node(const Key& k) : key(k) {
+  explicit Node(const Key& k, const size_t s) : key(k), node_size(s) {
     FIFO_next = nullptr;
     FIFO_prev = nullptr;
+    // node_size = 0;
   }
 
   Key const key;
@@ -207,11 +208,20 @@ struct SkipList<Key, Comparator>::Node {
   }
 
   void NoBarrier_Set_FIFO_Prev(Node* x) {
-    return FIFO_prev.store(x, std::memory_order_relaxed);
+    FIFO_prev.store(x, std::memory_order_relaxed);
+  }
+
+  void Set_Node_Size(size_t x) {
+    node_size.store(x, std::memory_order_acquire);
+  }
+
+  size_t Show_Node_Size() {
+    return node_size.load(std::memory_order_acquire);
   }
 
  private:
   // Array of length equal to the node height.  next_[0] is lowest level link.
+  std::atomic<size_t> node_size;    // 这里要注意内存对齐;
   std::atomic<Node*> FIFO_next;  // 考虑到node的构建方式, next_[1]应该放在最后;
   std::atomic<Node*> FIFO_prev;  // 由于每个node的层数是不确定的, 所以这里初始化为next_[1], 在构造函数中实际指定层数;
   std::atomic<Node*> next_[1];
@@ -219,10 +229,15 @@ struct SkipList<Key, Comparator>::Node {
 
 template <typename Key, class Comparator>
 typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::NewNode(
-    const Key& key, int height) {
+    const Key& key, int height, size_t Size) {
+  size_t Node_memory =  sizeof(Node) + sizeof(std::atomic<Node*>) * (height - 1);
   char* const node_memory = arena_->AllocateAligned(
       sizeof(Node) + sizeof(std::atomic<Node*>) * (height - 1));
-  return new (node_memory) Node(key);   // 在获得了一块可以容纳指定对象的内存后, 在该内存空间上直接构造; placement new;
+  // node_size.store(Node_memory + Size, std::memory_order_acquire);
+  Size += Node_memory;
+  // fprintf(stderr, "height: %zu, Key Size: %u, Node Size: %u\n", height, Size, Node_memory);
+
+  return new (node_memory) Node(key, Size);   // 在获得了一块可以容纳指定对象的内存后, 在该内存空间上直接构造; placement new;
 }
 
 // FIFO部分函数功能:
@@ -236,6 +251,8 @@ class SkipList<Key, Comparator>::FIFO {
    size_t Hot_MemoryUsage() const;
 
    size_t Cold_MemoryUsage() const;
+
+   void FreezeNode(Node* x);
 
    // void FreezeNode(int r);
 
@@ -283,18 +300,16 @@ class SkipList<Key, Comparator>::FIFO {
       Node* cold_head_;      // 初始化为nullptr;  the oldest cold node, also the oldest of the whole node;
       Node* cur_node_;    // the newest node;
 
-      int hot_mem;
-      int cold_mem;
+      std::atomic<size_t> hot_mem;
+      std::atomic<size_t> cold_mem;
+      // size_t threshold_;
 };
 
 template <typename Key, class Comparator>
-SkipList<Key, Comparator>::FIFO::FIFO() {
+SkipList<Key, Comparator>::FIFO::FIFO() : hot_mem(0), cold_mem(0) {
   normal_head_ = nullptr;
   cold_head_ = nullptr;
   cur_node_ = nullptr;
-  
-  hot_mem = 0;
-  cold_mem = 0;
 }
 
 template <typename Key, class Comparator>
@@ -317,13 +332,31 @@ void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
 
 template <typename Key, class Comparator>
 size_t SkipList<Key, Comparator>::FIFO::Hot_MemoryUsage() const {
-  return hot_mem;
+  return hot_mem.load(std::memory_order_acquire);
 }
 
 template <typename Key, class Comparator>
 size_t SkipList<Key, Comparator>::FIFO::Cold_MemoryUsage() const {
-  return cold_mem;
+  return cold_mem.load(std::memory_order_acquire);
 }
+
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::FIFO::FreezeNode(Node* x) {
+  /*size_t Node_Size_ = x->Show_Node_Size();
+  size_t Move_Size_ = Hot_MemoryUsage() + Node_Size_ - (); 
+  
+  if(cold_head_ == nullptr) {
+    cold_head_ = normal_head_;
+  }
+
+  size_t sum = 0;
+  while(sum < Move_Size_) {
+
+  } */
+  
+  
+}
+
 
 template <typename Key, class Comparator>
 inline SkipList<Key, Comparator>::FIFO::FIFO_Iterator::FIFO_Iterator(const SkipList* list) {
@@ -519,17 +552,19 @@ template <typename Key, class Comparator>
 SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
     : compare_(cmp),
       arena_(arena),
-      head_(NewNode(0 /* any key will do */, kMaxHeight)),
+      head_(NewNode(0 /* any key will do */, kMaxHeight, 0)),
       max_height_(1),
       rnd_(0xdeadbeef) {
-  FIFO_ = new FIFO;
+  FIFO_ = new FIFO();
+  // uint16_t s = 0;
+  // head_ = NewNode(0, kMaxHeight, s);
   for (int i = 0; i < kMaxHeight; i++) {
     head_->SetNext(i, nullptr);
   }
 }
 
 template <typename Key, class Comparator>
-void SkipList<Key, Comparator>::Insert(const Key& key) {
+void SkipList<Key, Comparator>::Insert(const Key& key, size_t Size) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
   // fprintf(stderr, "%s\n", "SkipList Insert Begin!");
@@ -554,7 +589,11 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
     max_height_.store(height, std::memory_order_relaxed);
   }
 
-  x = NewNode(key, height);
+  x = NewNode(key, height, Size);
+  
+  // fprintf(stderr, "node size: %zu\n", x->Show_Node_Size());
+  //fprintf(stderr, "Node Size: %zu\n", sizeof(*x));
+
   for (int i = 0; i < height; i++) {
     // NoBarrier_SetNext() suffices since we will add a barrier when
     // we publish a pointer to "x" in prev[i].

@@ -36,7 +36,7 @@ struct Comparator {
   }
 };
 
-TEST(SkipTest, DISABLED_Empty) {
+TEST(SkipTest, Empty) {
   Arena arena;
   Comparator cmp;
   SkipList<Key, Comparator> list(cmp, &arena);
@@ -53,7 +53,7 @@ TEST(SkipTest, DISABLED_Empty) {
 }
 
 
-TEST(FIFOTest, DISABLED_Empty) {
+TEST(FIFOTest, Empty) {
   Arena arena;
   Comparator cmp;
   SkipList<Key, Comparator> list(cmp, &arena);
@@ -87,7 +87,7 @@ TEST(SkipTest, InsertAndLookup) {
       Key key = rnd.Next() % R;
       //fprintf(stderr, "%zu\n", key);
       if (keys.insert(key).second) {
-        list.Insert(key);
+        list.Insert(key, sizeof(key));
       }
     }
 
@@ -171,7 +171,7 @@ TEST(SkipTest, InsertAndLookup) {
   }
 }
 
-TEST(FIFOTest, DISABLED_InsertAndLookup) {
+TEST(FIFOTest, InsertAndLookup) {
   const int N = 2000;
   const int R = 5000;
   Random rnd(1000);
@@ -184,7 +184,7 @@ TEST(FIFOTest, DISABLED_InsertAndLookup) {
     Key key = rnd.Next() % R;
     //fprintf(stderr, "%zu\n", key);
     if (keys.insert(key).second) {
-      list.Insert(key);
+      list.Insert(key, sizeof(key));
       keys_.emplace_back(key);
     }
   }
@@ -193,7 +193,7 @@ TEST(FIFOTest, DISABLED_InsertAndLookup) {
     Key key = rnd.Next() % R;
     //fprintf(stderr, "%zu\n", key);
     if (keys.insert(key).second) {
-      list.Insert(key);
+      list.Insert(key, sizeof(key));
       keys_.emplace_back(key);
     }
   }
@@ -413,7 +413,7 @@ class ConcurrentTest {
     const uint32_t k = rnd->Next() % K;
     const intptr_t g = current_.Get(k) + 1;
     const Key key = MakeKey(k, g);
-    list_.Insert(key);
+    list_.Insert(key, sizeof(key));
     current_.Set(k, g);
   }
 
@@ -553,10 +553,10 @@ static void RunConcurrent(int run) {
   }
 }
 
-TEST(SkipTest, DISABLED_Concurrent1) { RunConcurrent(1); }
-TEST(SkipTest, DISABLED_Concurrent2) { RunConcurrent(2); }
-TEST(SkipTest, DISABLED_Concurrent3) { RunConcurrent(3); }
-TEST(SkipTest, DISABLED_Concurrent4) { RunConcurrent(4); }
-TEST(SkipTest, DISABLED_Concurrent5) { RunConcurrent(5); }
+TEST(SkipTest, Concurrent1) { RunConcurrent(1); }
+TEST(SkipTest, Concurrent2) { RunConcurrent(2); }
+TEST(SkipTest, Concurrent3) { RunConcurrent(3); }
+TEST(SkipTest, Concurrent4) { RunConcurrent(4); }
+TEST(SkipTest, Concurrent5) { RunConcurrent(5); }
 
 }  // namespace leveldb
