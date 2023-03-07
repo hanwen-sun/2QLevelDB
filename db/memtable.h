@@ -21,7 +21,7 @@ class MemTable {
  public:
   // MemTables are reference counted.  The initial reference count
   // is zero and the caller must call Ref() at least once.
-  explicit MemTable(const InternalKeyComparator& comparator);
+  explicit MemTable(const InternalKeyComparator& comparator, size_t threshold);
 
   MemTable(const MemTable&) = delete;
   MemTable& operator=(const MemTable&) = delete;

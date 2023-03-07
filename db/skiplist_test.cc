@@ -39,7 +39,7 @@ struct Comparator {
 TEST(SkipTest, Empty) {
   Arena arena;
   Comparator cmp;
-  SkipList<Key, Comparator> list(cmp, &arena);
+  SkipList<Key, Comparator> list(cmp, &arena, 1024);
   ASSERT_TRUE(!list.Contains(10));
 
   SkipList<Key, Comparator>::Iterator iter(&list);
@@ -50,13 +50,16 @@ TEST(SkipTest, Empty) {
   ASSERT_TRUE(!iter.Valid());
   iter.SeekToLast();
   ASSERT_TRUE(!iter.Valid());
+
+  ASSERT_EQ(list.Hot_MemoryUsage_(), 0);
+  ASSERT_EQ(list.Cold_MemoryUsage_(), 0);
 }
 
 
 TEST(FIFOTest, Empty) {
   Arena arena;
   Comparator cmp;
-  SkipList<Key, Comparator> list(cmp, &arena);
+  SkipList<Key, Comparator> list(cmp, &arena, 1024);
   ASSERT_TRUE(!list.Contains(10));
 
   SkipList<Key, Comparator>::FIFO::FIFO_Iterator iter(&list);
@@ -67,6 +70,9 @@ TEST(FIFOTest, Empty) {
   ASSERT_TRUE(!iter.Valid());
   iter.SeekToLast();
   ASSERT_TRUE(!iter.Valid());
+
+  ASSERT_EQ(list.Hot_MemoryUsage_(), 0);
+  ASSERT_EQ(list.Cold_MemoryUsage_(), 0);
 }
 
 // 这里可以直接测Memtable!!
@@ -78,7 +84,7 @@ TEST(SkipTest, InsertAndLookup) {
   Arena arena;
   Comparator cmp;
 
-  SkipList<Key, Comparator> list(cmp, &arena);
+  SkipList<Key, Comparator> list(cmp, &arena, 1024);
   // simple test;
   {
     SkipList<Key, Comparator>::Iterator iter(&list);
@@ -92,6 +98,7 @@ TEST(SkipTest, InsertAndLookup) {
     }
 
     ASSERT_TRUE(!iter.Valid());
+    ASSERT_LE(list.Hot_MemoryUsage_(), 1024);  // val1 <= val2;
 
     iter.Seek(0);
     ASSERT_TRUE(iter.Valid());
@@ -105,9 +112,6 @@ TEST(SkipTest, InsertAndLookup) {
     ASSERT_TRUE(iter.Valid());
     ASSERT_EQ(*(keys.rbegin()), iter.key());
   }
-
-
-  
 
   for (int i = 0; i < R; i++) {
     if (list.Contains(i)) {
@@ -169,6 +173,8 @@ TEST(SkipTest, InsertAndLookup) {
     }
     ASSERT_TRUE(!iter.Valid());
   }
+
+  fprintf(stderr, "hot: %zu cold: %zu\n", list.Hot_MemoryUsage_(), list.Cold_MemoryUsage_());
 }
 
 TEST(FIFOTest, InsertAndLookup) {
@@ -179,16 +185,7 @@ TEST(FIFOTest, InsertAndLookup) {
   std::vector<Key> keys_;
   Arena arena;
   Comparator cmp;
-  SkipList<Key, Comparator> list(cmp, &arena);
-  for (int i = 0; i < N; i++) {
-    Key key = rnd.Next() % R;
-    //fprintf(stderr, "%zu\n", key);
-    if (keys.insert(key).second) {
-      list.Insert(key, sizeof(key));
-      keys_.emplace_back(key);
-    }
-  }
-  
+  SkipList<Key, Comparator> list(cmp, &arena, 1024);
   for (int i = 0; i < N; i++) {
     Key key = rnd.Next() % R;
     //fprintf(stderr, "%zu\n", key);
@@ -198,6 +195,7 @@ TEST(FIFOTest, InsertAndLookup) {
     }
   }
 
+  ASSERT_LE(list.Hot_MemoryUsage_(), 1024);  // val1 <= val2;
   //fprintf(stderr, "%zu %zu\n", keys_.size(), keys.size());
   // Simple iterator tests
   {
@@ -251,6 +249,8 @@ TEST(FIFOTest, InsertAndLookup) {
 
     ASSERT_TRUE(!iter.Valid());
   }
+
+  fprintf(stderr, "hot: %zu cold: %zu\n", list.Hot_MemoryUsage_(), list.Cold_MemoryUsage_());
 }
 
 // We want to make sure that with a single writer and multiple
@@ -406,7 +406,7 @@ class ConcurrentTest {
   SkipList<Key, Comparator> list_;
 
  public:
-  ConcurrentTest() : list_(Comparator(), &arena_) {}
+  ConcurrentTest() : list_(Comparator(), &arena_, 1024) {}
 
   // REQUIRES: External synchronization
   void WriteStep(Random* rnd) {
@@ -472,6 +472,7 @@ class ConcurrentTest {
         }
       }
     }
+    ASSERT_LE(list_.Hot_MemoryUsage_(), 1024);  // val1 <= val2;
   }
 };
 

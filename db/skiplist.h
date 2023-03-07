@@ -46,7 +46,7 @@ class SkipList {
   // Create a new SkipList object that will use "cmp" for comparing keys,
   // and will allocate memory using "*arena".  Objects allocated in the arena
   // must remain allocated for the lifetime of the skiplist object.
-  explicit SkipList(Comparator cmp, Arena* arena);
+  explicit SkipList(Comparator cmp, Arena* arena, size_t threshold);
 
   SkipList(const SkipList&) = delete;
   SkipList& operator=(const SkipList&) = delete;
@@ -57,6 +57,10 @@ class SkipList {
 
   // Returns true iff an entry that compares equal to key is in the list.
   bool Contains(const Key& key) const;
+
+  size_t Hot_MemoryUsage_();
+
+  size_t Cold_MemoryUsage_();
 
   class FIFO;
 
@@ -244,13 +248,19 @@ typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::NewNode(
 template <typename Key, class Comparator>
 class SkipList<Key, Comparator>::FIFO {
  public:
-   explicit FIFO();
+   explicit FIFO(size_t threshold);
 
    void Insert(Node* x);
 
    size_t Hot_MemoryUsage() const;
 
    size_t Cold_MemoryUsage() const;
+   
+   size_t Get_Threshold() const;
+
+   void Set_Hot_Memory(size_t hot_mem_);
+
+   void Set_Cold_Memory(size_t cold_mem_);
 
    void FreezeNode(Node* x);
 
@@ -302,20 +312,41 @@ class SkipList<Key, Comparator>::FIFO {
 
       std::atomic<size_t> hot_mem;
       std::atomic<size_t> cold_mem;
-      // size_t threshold_;
+      size_t threshold_;
 };
 
 template <typename Key, class Comparator>
-SkipList<Key, Comparator>::FIFO::FIFO() : hot_mem(0), cold_mem(0) {
+SkipList<Key, Comparator>::FIFO::FIFO(size_t threshold) : threshold_(threshold), hot_mem(0), cold_mem(0) {
   normal_head_ = nullptr;
   cold_head_ = nullptr;
   cur_node_ = nullptr;
 }
 
 template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::FIFO::FreezeNode(Node* x) {
+  size_t Node_Size = x->Show_Node_Size();
+  if(Hot_MemoryUsage() + Node_Size < threshold_)
+    return;
+  size_t Move_Size = Hot_MemoryUsage() + Node_Size - threshold_;  // 超出threshold， 移入冷数据;
+                                                      // 先判断要不要FreezeNode!!!
+  if(cold_head_ == nullptr) {
+    cold_head_ = normal_head_;
+  }
+
+  size_t sum = 0;
+  while(sum < Move_Size) {
+    sum += normal_head_->Show_Node_Size();
+    normal_head_ = normal_head_->FIFO_Next();
+  }
+
+  hot_mem.store(Hot_MemoryUsage() - sum, std::memory_order_acquire);
+  cold_mem.store(Cold_MemoryUsage() + sum, std::memory_order_acquire);
+}
+
+template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
   //fprintf(stderr, "%s\n", "FIFO Insert Begin");
-  // FreezeNode();
+  FreezeNode(x);
   if(normal_head_ == nullptr) {
       normal_head_ = x;
       cur_node_ = x;
@@ -326,6 +357,7 @@ void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
   cur_node_->Set_FIFO_Next(x);
 
   cur_node_ = cur_node_->FIFO_Next();
+  hot_mem.store(hot_mem + x->Show_Node_Size(), std::memory_order_acquire);
   //fprintf(stderr, "%zu\n", normal_head_->key);
   //fprintf(stderr, "%s\n", "FIFO Insert End!");
 }
@@ -340,22 +372,10 @@ size_t SkipList<Key, Comparator>::FIFO::Cold_MemoryUsage() const {
   return cold_mem.load(std::memory_order_acquire);
 }
 
-template <typename Key, class Comparator>
-void SkipList<Key, Comparator>::FIFO::FreezeNode(Node* x) {
-  /*size_t Node_Size_ = x->Show_Node_Size();
-  size_t Move_Size_ = Hot_MemoryUsage() + Node_Size_ - (); 
-  
-  if(cold_head_ == nullptr) {
-    cold_head_ = normal_head_;
-  }
-
-  size_t sum = 0;
-  while(sum < Move_Size_) {
-
-  } */
-  
-  
-}
+/*template <typename Key, class Comparator>
+size_t SkipList<Key, Comparator>::FIFO::Get_Threshold() {
+  return threshold_;
+}*/
 
 
 template <typename Key, class Comparator>
@@ -549,13 +569,13 @@ typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::FindLast()
 }
 
 template <typename Key, class Comparator>
-SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
+SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena, size_t threshold)
     : compare_(cmp),
       arena_(arena),
       head_(NewNode(0 /* any key will do */, kMaxHeight, 0)),
       max_height_(1),
       rnd_(0xdeadbeef) {
-  FIFO_ = new FIFO();
+  FIFO_ = new FIFO(threshold);
   // uint16_t s = 0;
   // head_ = NewNode(0, kMaxHeight, s);
   for (int i = 0; i < kMaxHeight; i++) {
@@ -613,6 +633,16 @@ bool SkipList<Key, Comparator>::Contains(const Key& key) const {
   } else {
     return false;
   }
+}
+
+template <typename Key, class Comparator>
+size_t SkipList<Key, Comparator>::Hot_MemoryUsage_() {
+  return FIFO_->Hot_MemoryUsage();
+}
+
+template <typename Key, class Comparator>
+size_t SkipList<Key, Comparator>::Cold_MemoryUsage_() {
+  return FIFO_->Cold_MemoryUsage();
 }
 
 }  // namespace leveldb

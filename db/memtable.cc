@@ -18,8 +18,8 @@ static Slice GetLengthPrefixedSlice(const char* data) {
   return Slice(p, len);
 }
 
-MemTable::MemTable(const InternalKeyComparator& comparator)
-    : comparator_(comparator), refs_(0), table_(comparator_, &arena_) {}
+MemTable::MemTable(const InternalKeyComparator& comparator, size_t threshold)
+    : comparator_(comparator), refs_(0), table_(comparator_, &arena_, threshold) {}
 
 MemTable::~MemTable() { assert(refs_ == 0); }
 

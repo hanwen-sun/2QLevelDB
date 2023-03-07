@@ -301,13 +301,13 @@ class MemTableConstructor : public Constructor {
  public:
   explicit MemTableConstructor(const Comparator* cmp)
       : Constructor(cmp), internal_comparator_(cmp) {
-    memtable_ = new MemTable(internal_comparator_);
+    memtable_ = new MemTable(internal_comparator_, 1024);
     memtable_->Ref();
   }
   ~MemTableConstructor() override { memtable_->Unref(); }
   Status FinishImpl(const Options& options, const KVMap& data) override {
     memtable_->Unref();
-    memtable_ = new MemTable(internal_comparator_);
+    memtable_ = new MemTable(internal_comparator_, 1024);
     memtable_->Ref();
     int seq = 1;
     for (const auto& kvp : data) {
@@ -723,7 +723,7 @@ TEST_F(Harness, RandomizedLongDB) {
 
 TEST(MemTableTest, Simple) {
   InternalKeyComparator cmp(BytewiseComparator());
-  MemTable* memtable = new MemTable(cmp);
+  MemTable* memtable = new MemTable(cmp, 1024);
   memtable->Ref();
   WriteBatch batch;
   WriteBatchInternal::SetSequence(&batch, 100);

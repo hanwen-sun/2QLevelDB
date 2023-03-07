@@ -13,7 +13,7 @@ namespace leveldb {
 
 static std::string PrintContents(WriteBatch* b) {
   InternalKeyComparator cmp(BytewiseComparator());
-  MemTable* mem = new MemTable(cmp);
+  MemTable* mem = new MemTable(cmp, 1024);
   mem->Ref();
   std::string state;
   Status s = WriteBatchInternal::InsertInto(b, mem);
