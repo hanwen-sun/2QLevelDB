@@ -27,15 +27,22 @@ TEST(MemTableTest, Simple) {
   WriteBatch batch;
   WriteBatchInternal::SetSequence(&batch, 100);
   batch.Put(std::string("k1"), std::string("v1"));
+  batch.Put(std::string("k1"), std::string("v11"));
   batch.Put(std::string("k2"), std::string("v2"));
   batch.Put(std::string("k3"), std::string("v3"));
+  batch.Put(std::string("k2"), std::string("v22"));
   batch.Put(std::string("largekey"), std::string("vlarge"));
+  // batch.Put(std::string("k1"), std::string("v11"));
+  batch.Put(std::string("k3"), std::string("v33"));
+  batch.Put(std::string("k1"), std::string("v111"));
+  batch.Put(std::string("k4"), std::string("v4"));
+
   ASSERT_TRUE(WriteBatchInternal::InsertInto(&batch, memtable).ok());
 
   std::string value;
-  LookupKey lkey(std::string("k2"), 101);  // 这里的sequence_number到底是干啥的?   相当于你能使用的最新的sequence_key;
+  LookupKey lkey(std::string("k2"), 110);  // 这里的sequence_number到底是干啥的?   相当于你能使用的最新的sequence_key;
   ASSERT_TRUE(memtable->Get(lkey, &value, nullptr));   // 如果memtable使用过程中出现比该seq_key还新, 则返回false;
-  ASSERT_EQ(value, "v2");
+  ASSERT_EQ(value, "v22");
   std::fprintf(stderr, "value: %s\n", value.c_str());
 
   Iterator* iter = memtable->NewIterator();
@@ -46,7 +53,24 @@ TEST(MemTableTest, Simple) {
     iter->Next();
   }
 
+  Iterator* FIFO_iter = memtable->NewFIFOIterator();
+  FIFO_iter->SeekToFirst();
+  while (FIFO_iter->Valid()) {
+    std::fprintf(stderr, "key: '%s' -> '%s'\n", FIFO_iter->key().ToString().c_str(),
+                 FIFO_iter->value().ToString().c_str());
+    FIFO_iter->Next();
+  }
+
+  FIFO_iter->SeekToLast();
+  while (FIFO_iter->Valid()) {
+    std::fprintf(stderr, "key: '%s' -> '%s'\n", FIFO_iter->key().ToString().c_str(),
+                FIFO_iter->value().ToString().c_str());
+    FIFO_iter->Prev();
+  }
+
+  // memtable->Test();
   delete iter;
+  delete FIFO_iter;
   memtable->Unref();
   // delete memtable;
 }

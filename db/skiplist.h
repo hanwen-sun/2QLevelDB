@@ -62,6 +62,10 @@ class SkipList {
 
   size_t Cold_MemoryUsage_();
 
+  void ThrawNode(const Key& key);
+
+  void Test();
+
   class FIFO;
 
   // Iteration over the contents of a skip list
@@ -188,7 +192,10 @@ struct SkipList<Key, Comparator>::Node {
   }
 
   void Set_FIFO_Next(Node* x) {
+    //fprintf(stderr, "%d\n", 1);
     FIFO_next.store(x, std::memory_order_acquire);
+    // FIFO_next = x;
+    //fprintf(stderr, "%d\n", 2);
   }
 
   Node* NoBarrier_FIFO_Next() {
@@ -205,6 +212,7 @@ struct SkipList<Key, Comparator>::Node {
 
   void Set_FIFO_Prev(Node* x) {
     FIFO_prev.store(x, std::memory_order_acquire);
+    // FIFO_prev = x;
   }
 
   Node* NoBarrier_FIFO_Prev() {
@@ -264,7 +272,10 @@ class SkipList<Key, Comparator>::FIFO {
 
    void FreezeNode(Node* x);
 
+   void DeleteNode(Node* x);
    // void FreezeNode(int r);
+   void Move_head();
+
 
    class FIFO_Iterator {
       public:
@@ -344,6 +355,40 @@ void SkipList<Key, Comparator>::FIFO::FreezeNode(Node* x) {
 }
 
 template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::FIFO::DeleteNode(Node* x) {
+  // 注: 这里的x可能是head node!
+  // fprintf(stderr, "%s\n", "begin delete node!");
+  Node* Prev_ = x->FIFO_Prev();
+  Node* Next_ = x->FIFO_Next();
+
+  // 先特判x是否head_node并处理：
+  if(x == cold_head_ || (cold_head_ == nullptr) && x == normal_head_) { 
+    if(x == cold_head_) {
+      cold_head_ = cold_head_->FIFO_Next();
+      cold_head_->Set_FIFO_Prev(nullptr);
+    }
+    
+    if(x == normal_head_) {
+      normal_head_ = normal_head_->FIFO_Next();
+      normal_head_->Set_FIFO_Prev(nullptr);
+    }
+
+    return;
+  }
+
+  // 被删除的结点不可能是最后一个;
+  Prev_->Set_FIFO_Next(Next_);
+  // fprintf(stderr, "%s\n", "break down");
+  Next_->Set_FIFO_Prev(Prev_);
+
+  // fprintf(stderr, "%s\n", "set done!");
+  x->Set_FIFO_Next(nullptr);
+  x->Set_FIFO_Prev(nullptr);
+  // fprintf(stderr, "%s\n", "end delete node!");
+}
+
+
+template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
   //fprintf(stderr, "%s\n", "FIFO Insert Begin");
   FreezeNode(x);
@@ -355,6 +400,7 @@ void SkipList<Key, Comparator>::FIFO::Insert(SkipList::Node* x) {
 
   x->NoBarrier_Set_FIFO_Prev(cur_node_);  // 完成双向链表构建;
   cur_node_->Set_FIFO_Next(x);
+  // cur_node_->Set_FIFO_Next(x->FIFO_Prev());
 
   cur_node_ = cur_node_->FIFO_Next();
   hot_mem.store(hot_mem + x->Show_Node_Size(), std::memory_order_acquire);
@@ -372,6 +418,10 @@ size_t SkipList<Key, Comparator>::FIFO::Cold_MemoryUsage() const {
   return cold_mem.load(std::memory_order_acquire);
 }
 
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::FIFO::Move_head() {
+  normal_head_->Set_FIFO_Next(cur_node_); 
+}
 /*template <typename Key, class Comparator>
 size_t SkipList<Key, Comparator>::FIFO::Get_Threshold() {
   return threshold_;
@@ -622,7 +672,7 @@ void SkipList<Key, Comparator>::Insert(const Key& key, size_t Size) {
   }
 
   FIFO_->Insert(x);
-  //fprintf(stderr, "%s\n", "SkipList Insert Done!");
+  // fprintf(stderr, "%s\n", "SkipList Insert Done!");
 }
 
 template <typename Key, class Comparator>
@@ -644,6 +694,21 @@ template <typename Key, class Comparator>
 size_t SkipList<Key, Comparator>::Cold_MemoryUsage_() {
   return FIFO_->Cold_MemoryUsage();
 }
+
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::ThrawNode(const Key& key) {
+  //fprintf(stderr, "%s\n", "begin thraw node!");
+  Node* x = FindGreaterOrEqual(key, nullptr);   // 找到该结点;  
+  
+  FIFO_->DeleteNode(x);
+  // fprintf(stderr, "%s\n", "end thraw node!");
+}
+
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::Test() {
+  FIFO_->Move_head();
+}
+
 
 }  // namespace leveldb
 

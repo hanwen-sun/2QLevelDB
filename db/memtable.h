@@ -16,6 +16,7 @@ namespace leveldb {
 
 class InternalKeyComparator;
 class MemTableIterator;
+class FIFOIterator;
 
 class MemTable {
  public:
@@ -50,6 +51,8 @@ class MemTable {
   // db/format.{h,cc} module.
   Iterator* NewIterator();
 
+  Iterator* NewFIFOIterator();
+
   // Add an entry into memtable that maps key to value at the
   // specified sequence number and with the specified type.
   // Typically value will be empty if type==kTypeDeletion.
@@ -62,9 +65,12 @@ class MemTable {
   // Else, return false.
   bool Get(const LookupKey& key, std::string* value, Status* s);
 
+  void Test();
+  
  private:
   friend class MemTableIterator;
   friend class MemTableBackwardIterator;
+  friend class FIFOIterator;
 
   struct KeyComparator {
     const InternalKeyComparator comparator;

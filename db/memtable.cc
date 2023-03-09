@@ -73,6 +73,37 @@ class MemTableIterator : public Iterator {
 
 Iterator* MemTable::NewIterator() { return new MemTableIterator(&table_); }
 
+class FIFOIterator : public Iterator {
+ public:
+  explicit FIFOIterator(MemTable::Table* table) : iter_(table) {}
+
+  FIFOIterator(const FIFOIterator&) = delete;
+  FIFOIterator& operator=(const FIFOIterator&) = delete;
+
+  ~FIFOIterator() override = default;
+
+  bool Valid() const override { return iter_.Valid(); }
+  void Seek(const Slice& k) override { iter_.Seek(EncodeKey(&tmp_, k)); }
+  void SeekToFirst() override { iter_.SeekToFirst(); }
+  void SeekToLast() override { iter_.SeekToLast(); }
+  void Next() override { iter_.Next(); }
+  void Prev() override { iter_.Prev(); }
+  Slice key() const override { return GetLengthPrefixedSlice(iter_.key()); }
+  Slice value() const override {
+    Slice key_slice = GetLengthPrefixedSlice(iter_.key());
+    return GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
+  }
+
+  Status status() const override { return Status::OK(); }
+
+ private:
+  MemTable::Table::FIFO::FIFO_Iterator iter_;
+  std::string tmp_;  // For passing to EncodeKey
+};
+
+Iterator* MemTable::NewFIFOIterator() { return new FIFOIterator(&table_); }
+
+
 void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
                    const Slice& value) {
   // Format of an entry is concatenation of:
@@ -98,7 +129,39 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   p = EncodeVarint32(p, val_size);
   std::memcpy(p, value.data(), val_size);
   assert(p + val_size == buf + encoded_len);
-  table_.Insert(buf, encoded_len);
+  // fprintf(stderr, "show: %x\n", buf);
+
+  table_.Insert(buf, encoded_len);   // 这里buf就是插入的key, 迭代器直接找就行;
+  // 在这里, insert结束后进行thrawNode!!!;
+  // 1. 调用SkipList Iterator 判断是否有两个相同的userkey, 参考get方法;
+  // 2. 如果有两个相同的userkey, 传入旧的那个key, 调用SkipList的ThrawNode方法;
+      //  根据SkipList找到Node x, 得到x的FIFO_Prev和FIFO_Next;
+      //  删除x, 将x放入obslete_中, 注意判断是否是cold_head_ or normal_head_;
+  // 3. 结束
+
+  Table::Iterator iter(&table_);
+  iter.Seek(buf);
+  assert(iter.Valid());
+  iter.Next();   // 查找下一个key;
+  if(iter.Valid()) {
+    // fprintf(stderr, "%s\n", "duplicate!");
+    //fprintf(stderr, "%s\n", "yes!");
+    const char* entry = iter.key();
+    uint32_t key_length;
+    const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length);
+    // fprintf(stderr, "%s   %s\n", Slice(key_ptr, key_length - 8).ToString().c_str(), key.ToString().c_str());
+    // 比较key_ptr和key是否相等;
+    if(comparator_.comparator.user_comparator()->Compare(
+          Slice(key_ptr, key_length - 8), key) == 0) {
+          // fprintf(stderr, "%s\n", "find same user key!");
+          // ThrawNode测试方法: 
+          // 1. 测试头两个结点相同(立刻删除头结点);
+          // 2. 中间删除头结点;
+          // 3. 结尾删除尾结点;
+
+          table_.ThrawNode(entry);
+    }
+  }
 }
 
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
@@ -135,6 +198,10 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
     }
   }
   return false;
+}
+
+void MemTable::Test() {
+  table_.Test();
 }
 
 }  // namespace leveldb
