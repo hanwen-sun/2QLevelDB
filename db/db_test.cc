@@ -598,9 +598,13 @@ TEST_F(DBTest, GetFromImmutableLayer) {
     ASSERT_EQ("v1", Get("foo"));
 
     // Block sync calls.
+    // fprintf(stderr, "%s\n", "go here!");
     env_->delay_data_sync_.store(true, std::memory_order_release);
+    // fprintf(stderr, "%s\n", "store error!");
     Put("k1", std::string(100000, 'x'));  // Fill memtable.
+    // fprintf(stderr, "%d\n", 1);
     Put("k2", std::string(100000, 'y'));  // Trigger compaction.
+    // fprintf(stderr, "%s\n", "put done!");
     ASSERT_EQ("v1", Get("foo"));
     // Release sync calls.
     env_->delay_data_sync_.store(false, std::memory_order_release);
@@ -1518,7 +1522,7 @@ TEST_F(DBTest, L0_CompactionBug_Issue44_b) {
   ASSERT_EQ("(->)(c->cv)", Contents());
 }
 
-TEST_F(DBTest, Fflush_Issue474) {
+TEST_F(DBTest, Fflush_Issue474) {  // mark
   static const int kNum = 100000;
   Random rnd(test::RandomSeed());
   for (int i = 0; i < kNum; i++) {

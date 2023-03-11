@@ -214,6 +214,7 @@ TEST_F(CorruptionTest, NewFileErrorDuringWrite) {
   std::string value_storage;
   Status s;
   for (int i = 0; s.ok() && i < num; i++) {
+    fprintf(stderr, "%d\n", i);
     WriteBatch batch;
     batch.Put("a", Value(100, &value_storage));
     s = db_->Write(WriteOptions(), &batch);
@@ -221,6 +222,7 @@ TEST_F(CorruptionTest, NewFileErrorDuringWrite) {
   ASSERT_TRUE(!s.ok());
   ASSERT_GE(env_.num_writable_file_errors_, 1);
   env_.writable_file_error_ = false;
+  // fprintf(stderr, "%s\n", "go here!");
   Reopen();
 }
 

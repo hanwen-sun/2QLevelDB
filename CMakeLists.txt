@@ -395,6 +395,8 @@ if(LEVELDB_BUILD_TESTS)
   #leveldb_test("table/table_test.cc")
   leveldb_test("${PROJECT_SOURCE_DIR}/util/cache_test.cc")
   leveldb_test("db/skiplist_test.cc")
+  leveldb_test("db/corruption_test.cc")
+  leveldb_test("db/db_test.cc")
 
   leveldb_test("table/memtable_test.cc")
   if(NOT BUILD_SHARED_LIBS)
