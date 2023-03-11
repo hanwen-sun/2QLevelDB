@@ -38,11 +38,11 @@ TEST(MemTableTest, Simple) {
   batch.Put(std::string("k3"), std::string("v33"));
   batch.Put(std::string("k1"), std::string("v111"));
   batch.Put(std::string("k4"), std::string("v4"));
-  batch.Put(std::string("k5"), std::string(std::string(100000, 'x')));
+  // batch.Put(std::string("k5"), std::string(std::string(100000, 'x')));
 
   ASSERT_TRUE(WriteBatchInternal::InsertInto(&batch, memtable).ok());
 
-  /*std::string value;
+  std::string value;
   LookupKey lkey(std::string("k2"), 110);  // 这里的sequence_number到底是干啥的?   相当于你能使用的最新的sequence_key;
   ASSERT_TRUE(memtable->Get(lkey, &value, nullptr));   // 如果memtable使用过程中出现比该seq_key还新, 则返回false;
   ASSERT_EQ(value, "v22");
@@ -74,7 +74,7 @@ TEST(MemTableTest, Simple) {
   // memtable->Test();
   delete iter;
   delete FIFO_iter;
-  memtable->Unref(); */
+  memtable->Unref(); 
   // delete memtable;
 }
 
