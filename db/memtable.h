@@ -67,6 +67,8 @@ class MemTable {
 
   void Test();
   
+  int CompareSequence(const char* aptr, const char* bptr) const;
+
  private:
   friend class MemTableIterator;
   friend class MemTableBackwardIterator;
@@ -76,6 +78,7 @@ class MemTable {
     const InternalKeyComparator comparator;
     explicit KeyComparator(const InternalKeyComparator& c) : comparator(c) {}
     int operator()(const char* a, const char* b) const;
+    // int operator[](const char* a, const char* b) const;
   };
 
   typedef SkipList<const char*, KeyComparator> Table;

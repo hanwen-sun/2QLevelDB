@@ -53,6 +53,7 @@ int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   if (r == 0) {
     const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
     const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+    // fprintf(stderr, "anum: %zu bnum: %zu\n", anum, bnum);
     if (anum > bnum) {
       r = -1;
     } else if (anum < bnum) {
@@ -61,6 +62,21 @@ int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   }
   return r;
 }
+
+int InternalKeyComparator::SequenceCompare(const Slice& akey, const Slice& bkey) const {
+  // order by:
+  //    decreasing sequence number;
+  int r = 0;
+  const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
+  const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+  if(anum > bnum) {
+    r = -1;
+  } else if (anum < bnum) {
+    r = +1;
+  } 
+  return r;
+}
+
 
 void InternalKeyComparator::FindShortestSeparator(std::string* start,
                                                   const Slice& limit) const {
@@ -116,7 +132,7 @@ bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f) const {
 
 LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   size_t usize = user_key.size();
-  size_t needed = usize + 13;  // A conservative estimate
+  size_t needed = usize + 13;  // A conservative estimate  klength(5) + userkey + tag(sequence) (8)
   char* dst;
   if (needed <= sizeof(space_)) {
     dst = space_;
@@ -124,11 +140,11 @@ LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
     dst = new char[needed];
   }
   start_ = dst;
-  dst = EncodeVarint32(dst, usize + 8);
+  dst = EncodeVarint32(dst, usize + 8);  // klength
   kstart_ = dst;
-  std::memcpy(dst, user_key.data(), usize);
+  std::memcpy(dst, user_key.data(), usize);   // userkey;
   dst += usize;
-  EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));
+  EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek)); // tag
   dst += 8;
   end_ = dst;
 }

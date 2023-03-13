@@ -33,6 +33,23 @@ int MemTable::KeyComparator::operator()(const char* aptr,
   return comparator.Compare(a, b);
 }
 
+int MemTable::CompareSequence(const char* aptr,
+                              const char* bptr) const {
+  Slice akey = GetLengthPrefixedSlice(aptr);
+  Slice bkey = GetLengthPrefixedSlice(bptr);
+
+  int r = 0;
+  const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
+  const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+  // fprintf(stderr, "anum: %zu bnum: %zu\n", anum, bnum);
+  if(anum > bnum) {
+    r = -1;
+  } else if (anum < bnum) {
+    r = +1;
+  } 
+  return r;
+} 
+
 // Encode a suitable internal key target for "target" and return it.
 // Uses *scratch as scratch space, and the returned pointer will point
 // into this scratch space.
@@ -114,7 +131,7 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   //  value bytes  : char[value.size()]
   size_t key_size = key.size();
   size_t val_size = value.size();
-  size_t internal_key_size = key_size + 8;
+  size_t internal_key_size = key_size + 8;   // 这里应该是加了tag
   const size_t encoded_len = VarintLength(internal_key_size) +
                              internal_key_size + VarintLength(val_size) +
                              val_size;
@@ -158,8 +175,14 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
           // 1. 测试头两个结点相同(立刻删除头结点);
           // 2. 中间删除头结点;
           // 3. 结尾删除尾结点;
+          // const char* normal = table_.GetNormal();
+          Table::FIFO::FIFO_Iterator iter(&table_);   // 这里对冷热数据的判断拿到memtable中, 更方便;
+          iter.SeekToNormal();
+          const char* normal_key = iter.key();
+          int r = CompareSequence(entry, normal_key);  // 特别注意, 这里是entry与normal_key比较
+          // fprintf(stderr, "%d\n", r);
 
-          table_.ThrawNode(entry);
+          table_.ThrawNode(entry, r);  // r <= 0, 减少normal区域, 否则减少cold区域;
     }
   }
 }
@@ -167,7 +190,7 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
   Slice memkey = key.memtable_key();
   Table::Iterator iter(&table_);
-  iter.Seek(memkey.data());
+  iter.Seek(memkey.data());   // .data()返回一个指向Slice的指针;
   if (iter.Valid()) {
     // entry format is:
     //    klength  varint32

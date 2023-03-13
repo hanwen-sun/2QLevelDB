@@ -24,20 +24,24 @@ static const int kValueSize = 1000;
 
 TEST(MemTableTest, Simple) {
   InternalKeyComparator cmp(BytewiseComparator());
-  MemTable* memtable = new MemTable(cmp, 1024);
+  
+  MemTable* memtable = new MemTable(cmp, 300);
   memtable->Ref();
   WriteBatch batch;
   WriteBatchInternal::SetSequence(&batch, 100);
   batch.Put(std::string("k1"), std::string("v1"));
-  batch.Put(std::string("k1"), std::string("v11"));
-  batch.Put(std::string("k2"), std::string("v2"));
-  batch.Put(std::string("k3"), std::string("v3"));
-  batch.Put(std::string("k2"), std::string("v22"));
-  batch.Put(std::string("largekey"), std::string("vlarge"));
   // batch.Put(std::string("k1"), std::string("v11"));
-  batch.Put(std::string("k3"), std::string("v33"));
-  batch.Put(std::string("k1"), std::string("v111"));
+  batch.Put(std::string("k2"), std::string("v2"));
+  batch.Put(std::string("k2"), std::string("v22"));  // shrink hot memory!;
+  batch.Put(std::string("k3"), std::string("v3"));
   batch.Put(std::string("k4"), std::string("v4"));
+  batch.Put(std::string("largekey"), std::string("vlarge"));
+  batch.Put(std::string("k11"), std::string("v11"));
+  batch.Put(std::string("k1"), std::string("v111"));  // shrink cold memory!;
+  batch.Put(std::string("k3"), std::string("v33"));  // shrink cold memory!;
+  batch.Put(std::string("k1"), std::string("v"));  // shrink hot memory!
+  
+  
   // batch.Put(std::string("k5"), std::string(std::string(100000, 'x')));
 
   ASSERT_TRUE(WriteBatchInternal::InsertInto(&batch, memtable).ok());

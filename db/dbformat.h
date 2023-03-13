@@ -114,6 +114,10 @@ class InternalKeyComparator : public Comparator {
   const Comparator* user_comparator() const { return user_comparator_; }
 
   int Compare(const InternalKey& a, const InternalKey& b) const;
+
+  int SequenceCompare(const Slice&a, const Slice& b) const;
+
+  int SequenceCompare(const InternalKey& a, const InternalKey& b) const;
 };
 
 // Filter policy wrapper that converts from internal keys to user keys
@@ -167,6 +171,12 @@ inline int InternalKeyComparator::Compare(const InternalKey& a,
                                           const InternalKey& b) const {
   return Compare(a.Encode(), b.Encode());
 }
+
+inline int InternalKeyComparator::SequenceCompare(const InternalKey& a,
+                                                  const InternalKey& b) const {
+  return SequenceCompare(a.Encode(), b.Encode());
+}
+
 
 inline bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result) {
