@@ -18,6 +18,7 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
+
 namespace leveldb {
 
 class MemTable;
@@ -25,6 +26,9 @@ class TableCache;
 class Version;
 class VersionEdit;
 class VersionSet;
+class Monitors;
+template <typename R, typename P>
+class Timer;
 
 class DBImpl : public DB {
  public:
@@ -48,9 +52,12 @@ class DBImpl : public DB {
   bool GetProperty(const Slice& property, std::string* value) override;
   void GetApproximateSizes(const Range* range, int n, uint64_t* sizes) override;
   void CompactRange(const Slice* begin, const Slice* end) override;
+  void GenReport() override;
 
   // Extra methods (for testing) that are not in the public DB interface
+  
 
+  void test();
   // Compact any files in the named level that overlap [*begin,*end]
   void TEST_CompactRange(int level, const Slice* begin, const Slice* end);
 
@@ -181,7 +188,9 @@ class DBImpl : public DB {
   uint64_t logfile_number_ GUARDED_BY(mutex_);
   log::Writer* log_;
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
-
+  Monitors* monitor_;
+  Timer<uint64_t, std::micro>* timer_;
+  
   // Queue of writers.
   std::deque<Writer*> writers_ GUARDED_BY(mutex_);
   WriteBatch* tmp_batch_ GUARDED_BY(mutex_);

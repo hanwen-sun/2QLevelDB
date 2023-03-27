@@ -34,6 +34,9 @@
 #include "util/coding.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
+#include "util/timer.h"
+#include "util/monitor.h"
+
 
 namespace leveldb {
 
@@ -146,8 +149,12 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
       manual_compaction_(nullptr),
+      monitor_(nullptr),
+      timer_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {}
+      
+
 
 DBImpl::~DBImpl() {
   // Wait for background work to finish.
@@ -548,6 +555,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
 
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
+  // fprintf(stderr, "CompactMemTable!\n");
   assert(imm_ != nullptr);
 
   // Save the contents of the memtable as a new Table
@@ -701,12 +709,14 @@ void DBImpl::BackgroundCall() {
 
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
+  // fprintf(stderr, "BackgroundCompaction!\n");
 
   if (imm_ != nullptr) {
     CompactMemTable();
     return;
   }
 
+  //fprintf(stderr, "go here!\n");
   Compaction* c;
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
@@ -725,12 +735,15 @@ void DBImpl::BackgroundCompaction() {
   } else {
     c = versions_->PickCompaction();
   }
+  // fprintf(stderr, "111\n");
 
   Status status;
   if (c == nullptr) {
     // Nothing to do
+    //fprintf(stderr, "nothing to do!\n");
   } else if (!is_manual && c->IsTrivialMove()) {   // 单纯移动level n的file 到level n + 1?
     // Move file to next level
+    // fprintf(stderr, "do this!\n");
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
     c->edit()->RemoveFile(c->level(), f->number);
@@ -746,6 +759,7 @@ void DBImpl::BackgroundCompaction() {
         static_cast<unsigned long long>(f->file_size),
         status.ToString().c_str(), versions_->LevelSummary(&tmp));
   } else {
+    //fprintf(stderr, "do compactionwork!\n");
     CompactionState* compact = new CompactionState(c);
     status = DoCompactionWork(compact);
     if (!status.ok()) {
@@ -890,6 +904,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
 }
 
 Status DBImpl::DoCompactionWork(CompactionState* compact) {
+  //fprintf(stderr, "DoCompactionWork!\n");
   const uint64_t start_micros = env_->NowMicros();
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
 
@@ -1190,6 +1205,7 @@ void DBImpl::ReleaseSnapshot(const Snapshot* snapshot) {
 
 // Convenience methods
 Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
+  // fprintf(stderr, "DBImpl put!\n");
   return DB::Put(o, key, val);
 }
 
@@ -1204,6 +1220,8 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   w.done = false;
 
   MutexLock l(&mutex_);
+  // May temporarily unlock and wait.
+  
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
@@ -1211,9 +1229,11 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   if (w.done) {
     return w.status;
   }
-
-  // May temporarily unlock and wait.
+  timer_->Start();
   Status status = MakeRoomForWrite(updates == nullptr);
+  uint64_t wait_elapsed = timer_->End();
+  monitor_->Report(WAIT_IMM, wait_elapsed);
+
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && updates != nullptr) {  // nullptr batch is for compactions
@@ -1227,6 +1247,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     {
       mutex_.Unlock();
+      timer_->Start();
       status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
       bool sync_error = false;
       if (status.ok() && options.sync) {
@@ -1235,8 +1256,14 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
           sync_error = true;
         }
       }
+      uint64_t log_elapsed = timer_->End();
+      // fprintf(stderr, "LOG_ELAPSED: %zu\n", log_elapsed);
+      monitor_->Report(WRITE_LOG, log_elapsed);
       if (status.ok()) {
+        timer_->Start();
         status = WriteBatchInternal::InsertInto(write_batch, mem_);
+        uint64_t mem_elapsed = timer_->End();
+        monitor_->Report(INSERT_MEM, mem_elapsed);
       }
       mutex_.Lock();
       if (sync_error) {
@@ -1464,9 +1491,16 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
   v->Unref();
 }
 
+void DBImpl::GenReport() {   // 特别注意这里不要与DBImpl的方法重名, 否则循环调用, segmentation fault!
+  //fprintf(stderr, "DB GenReport!\n");
+  monitor_->GenerateReport();
+}
+
+
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
+  //fprintf(stderr, "DB::Put!\n");
   WriteBatch batch;
   batch.Put(key, value);
   return Write(opt, &batch);
@@ -1481,6 +1515,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 DB::~DB() = default;
 
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
+  //fprintf(stderr, "levldb open!\n");
   *dbptr = nullptr;
 
   DBImpl* impl = new DBImpl(options, dbname);
@@ -1504,6 +1539,9 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
 
       impl->mem_ = new MemTable(impl->internal_comparator_, threshold);
       impl->mem_->Ref();
+      impl->monitor_ = new LatencyMonitors;
+      impl->monitor_->Reset();
+      impl->timer_ = new Timer<uint64_t, std::micro>;
     }
   }
   if (s.ok() && save_manifest) {
@@ -1522,6 +1560,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   } else {
     delete impl;
   }
+  // impl->GenReport();
   return s;
 }
 

@@ -20,7 +20,9 @@
 #include "util/mutexlock.h"
 #include "util/random.h"
 #include "util/testutil.h"
-
+#include <unistd.h>
+#include "util/monitor.h"
+#include "util/timer.h"
 // Comma-separated list of operations to run in the specified order
 //   Actual benchmarks:
 //      fillseq       -- write N values in sequential key order in async mode
@@ -72,7 +74,7 @@ static int FLAGS_reads = -1;
 static int FLAGS_threads = 1;
 
 // Size of each value
-static int FLAGS_value_size = 100;
+static int FLAGS_value_size = 1024;
 
 // Arrange to generate values that shrink to this fraction of
 // their original size after compression
@@ -119,7 +121,7 @@ static bool FLAGS_use_existing_db = false;
 static bool FLAGS_reuse_logs = false;
 
 // If true, use compression.
-static bool FLAGS_compression = true;
+static bool FLAGS_compression = false;
 
 // Use the db with the following name.
 static const char* FLAGS_db = nullptr;
@@ -382,6 +384,7 @@ class Benchmark {
   int heap_counter_;
   CountComparator count_comparator_;
   int total_thread_count_;
+  Monitors* monitor_;
 
   void PrintHeader() {
     const int kKeySize = 16 + FLAGS_key_prefix;
@@ -485,6 +488,8 @@ class Benchmark {
     if (!FLAGS_use_existing_db) {
       DestroyDB(FLAGS_db, Options());
     }
+    monitor_ = new LatencyMonitors;
+    monitor_->Reset();
   }
 
   ~Benchmark() {
@@ -791,9 +796,13 @@ class Benchmark {
     }
   }
 
-  void WriteSeq(ThreadState* thread) { DoWrite(thread, true); }
-
-  void WriteRandom(ThreadState* thread) { DoWrite(thread, false); }
+  void WriteSeq(ThreadState* thread) { 
+    DoWrite(thread, true);
+    //db_->GenReport();
+  }
+  void WriteRandom(ThreadState* thread) { 
+    DoWrite(thread, false);
+    }
 
   void DoWrite(ThreadState* thread, bool seq) {
     if (num_ != FLAGS_num) {
@@ -807,6 +816,7 @@ class Benchmark {
     Status s;
     int64_t bytes = 0;
     KeyBuffer key;
+    
     for (int i = 0; i < num_; i += entries_per_batch_) {
       batch.Clear();
       for (int j = 0; j < entries_per_batch_; j++) {
@@ -816,12 +826,18 @@ class Benchmark {
         bytes += value_size_ + key.slice().size();
         thread->stats.FinishedSingleOp();
       }
+      Timer<uint64_t, std::micro> timer_;
+      timer_.Start();
       s = db_->Write(write_options_, &batch);
+      uint64_t elapsed = timer_.End(); 
+      monitor_->Report(TOTAL_TIME, elapsed);
       if (!s.ok()) {
         std::fprintf(stderr, "put error: %s\n", s.ToString().c_str());
         std::exit(1);
       }
     }
+    db_->GenReport();
+    monitor_->GenerateReport();
     thread->stats.AddBytes(bytes);
   }
 
@@ -1024,6 +1040,7 @@ class Benchmark {
 }  // namespace leveldb
 
 int main(int argc, char** argv) {
+  sleep(2);
   FLAGS_write_buffer_size = leveldb::Options().write_buffer_size;
   FLAGS_max_file_size = leveldb::Options().max_file_size;
   FLAGS_block_size = leveldb::Options().block_size;

@@ -6,3 +6,9 @@
 # Build directory.
 build/
 out/
+*.log
+*.svg
+*.sh
+
+benchmark/
+googletest/

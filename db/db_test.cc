@@ -2110,6 +2110,8 @@ class ModelDB : public DB {
   }
   void CompactRange(const Slice* start, const Slice* end) override {}
 
+  void GenReport() override {fprintf(stderr, "genreport!\n");} 
+  
  private:
   class ModelIter : public Iterator {
    public:

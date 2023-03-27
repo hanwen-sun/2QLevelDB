@@ -184,11 +184,13 @@ target_sources(leveldb
     "util/hash.h"
     "util/logging.cc"
     "util/logging.h"
+    "util/monitor.h"
     "util/mutexlock.h"
     "util/no_destructor.h"
     "util/options.cc"
     "util/random.h"
     "util/status.cc"
+    "util/timer.h"
 
   # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
   $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>
