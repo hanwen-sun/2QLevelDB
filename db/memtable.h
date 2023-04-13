@@ -11,6 +11,7 @@
 #include "db/skiplist.h"
 #include "leveldb/db.h"
 #include "util/arena.h"
+#include<vector>
 
 namespace leveldb {
 
@@ -65,9 +66,17 @@ class MemTable {
   // Else, return false.
   bool Get(const LookupKey& key, std::string* value, Status* s);
 
+  void ExtractHot(std::vector<ParsedNormalKey>& hot_data);
+
+  bool Seperate();
+  
   void Test();
   
   int CompareSequence(const char* aptr, const char* bptr) const;
+
+  void SetFlag();  // turn the Seperate_flag from false to true;
+
+  bool GetFlag(); 
 
  private:
   friend class MemTableIterator;
@@ -89,6 +98,7 @@ class MemTable {
   int refs_;
   Arena arena_;
   Table table_;
+  bool Seperate_Flag;
 };
 
 }  // namespace leveldb

@@ -77,6 +77,18 @@ struct ParsedInternalKey {
   std::string DebugString() const;
 };
 
+struct ParsedNormalKey {
+  Slice user_key;
+  Slice value;
+  SequenceNumber sequence;
+  ValueType type;
+
+  ParsedNormalKey() {}
+  ParsedNormalKey(const Slice&u, const Slice& v, const SequenceNumber& seq, ValueType t)
+      : user_key(u), value(v), sequence(seq), type(t) {}
+  std::string DebugString() const;
+};
+
 // Return the length of the encoding of "key".
 inline size_t InternalKeyEncodingLength(const ParsedInternalKey& key) {
   return key.user_key.size() + 8;
@@ -90,6 +102,12 @@ void AppendInternalKey(std::string* result, const ParsedInternalKey& key);
 //
 // On error, returns false, leaves "*result" in an undefined state.
 bool ParseInternalKey(const Slice& internal_key, ParsedInternalKey* result);
+
+// Attempt to parse an internal key from "normal_key".  On success,
+// stores the parsed data in "*result", and returns true.
+//
+// On error, returns false, leaves "*result" in an undefined state.
+bool ParseNormalKey(const char* normal_key, ParsedNormalKey* result);
 
 // Returns the user key portion of an internal key.
 inline Slice ExtractUserKey(const Slice& internal_key) {
@@ -187,6 +205,32 @@ inline bool ParseInternalKey(const Slice& internal_key,
   result->sequence = num >> 8;
   result->type = static_cast<ValueType>(c);
   result->user_key = Slice(internal_key.data(), n - 8);
+  return (c <= static_cast<uint8_t>(kTypeValue));
+}
+
+static Slice GetLengthPrefixedSlice_(const char* data) {
+  uint32_t len;
+  const char* p = data;
+  p = GetVarint32Ptr(p, p + 5, &len);  // +5: we assume "p" is not corrupted
+  return Slice(p, len);
+}
+
+inline bool ParseNormalKey(const char* normal_key,
+                           ParsedNormalKey* result) {
+  uint32_t key_length;
+  const char* key_ptr = normal_key;
+  key_ptr = GetVarint32Ptr(key_ptr, key_ptr + 5, &key_length);  // +5: we assume "p" is not corrupted
+  Slice internal_key = Slice(key_ptr, key_length);
+
+  const size_t n = internal_key.size();
+  if (n < 8) return false;
+  uint64_t num = DecodeFixed64(internal_key.data() + n - 8);
+  uint8_t c = num & 0xff;
+  result->sequence = num >> 8;
+  result->type = static_cast<ValueType>(c);
+  result->user_key = Slice(internal_key.data(), n - 8);
+  result->value = GetLengthPrefixedSlice_(key_ptr + key_length);
+
   return (c <= static_cast<uint8_t>(kTypeValue));
 }
 

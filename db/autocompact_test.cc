@@ -64,14 +64,26 @@ void AutoCompactTest::DoReads(int n) {
   for (int i = 0; i < kCount; i++) {
     ASSERT_LEVELDB_OK(db_->Put(WriteOptions(), Key(i), value));
   }
+  //fprintf(stderr, "test1-0:\n");
+  uint64_t size = Size(Key(0), Key(n));
+  ////fprintf(stderr, "test compactmemtable1!\n");
   ASSERT_LEVELDB_OK(dbi->TEST_CompactMemTable());
-
+  //fprintf(stderr, "test1-1:\n");
+  size = Size(Key(0), Key(n));
+  ////fprintf(stderr, "compactmemtable1 done!\n");
   // Delete everything
+  ////fprintf(stderr, "test compactmemtable2!\n");
   for (int i = 0; i < kCount; i++) {
     ASSERT_LEVELDB_OK(db_->Delete(WriteOptions(), Key(i)));
   }
+  //fprintf(stderr, "test2-0:\n");
+  size = Size(Key(0), Key(n));
+  //fprintf(stderr, "compact memtable2!\n");
   ASSERT_LEVELDB_OK(dbi->TEST_CompactMemTable());
-
+  //fprintf(stderr, "test2-1:\n");
+  size = Size(Key(0), Key(n));
+  
+  ////fprintf(stderr, "test compactmemtable2 done!\n");
   // Get initial measurement of the space we will be reading.
   const int64_t initial_size = Size(Key(0), Key(n));
   const int64_t initial_other_size = Size(Key(n), Key(kCount));
@@ -103,7 +115,9 @@ void AutoCompactTest::DoReads(int n) {
   ASSERT_GE(final_other_size, initial_other_size / 5 - 1048576);
 }
 
-TEST_F(AutoCompactTest, ReadAll) { DoReads(kCount); }
+TEST_F(AutoCompactTest, ReadAll) { 
+  // //fprintf(stderr, "Read All!\n");
+  DoReads(kCount); }
 
 TEST_F(AutoCompactTest, ReadHalf) { DoReads(kCount / 2); }
 

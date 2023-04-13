@@ -29,6 +29,7 @@ class MergingIterator : public Iterator {
   bool Valid() const override { return (current_ != nullptr); }
 
   void SeekToFirst() override {
+    //fprintf(stderr, "Merging Iterator SeekToFirst!\n");
     for (int i = 0; i < n_; i++) {
       children_[i].SeekToFirst();
     }
@@ -179,6 +180,8 @@ void MergingIterator::FindLargest() {
 Iterator* NewMergingIterator(const Comparator* comparator, Iterator** children,
                              int n) {
   assert(n >= 0);
+  //fprintf(stderr, "New MergingIterator! List Size: %d\n", n);
+
   if (n == 0) {
     return NewEmptyIterator();
   } else if (n == 1) {

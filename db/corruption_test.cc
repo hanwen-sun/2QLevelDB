@@ -209,14 +209,16 @@ TEST_F(CorruptionTest, RecoverWriteError) {
 
 TEST_F(CorruptionTest, NewFileErrorDuringWrite) {
   // Do enough writing to force minor compaction
+  // 注: 这里测试写入过程中不能生成新文件, 即生成SSTable, 由于Seperate特性, 我们让每次写入的key不同;
   env_.writable_file_error_ = true;
   const int num = 3 + (Options().write_buffer_size / kValueSize);
   std::string value_storage;
   Status s;
   for (int i = 0; s.ok() && i < num; i++) {
-    fprintf(stderr, "%d\n", i);
+    //fprintf(stderr, "%d\n", i);
     WriteBatch batch;
-    batch.Put("a", Value(100, &value_storage));
+    std::string key = std::to_string(i);
+    batch.Put(key, Value(100, &value_storage));
     s = db_->Write(WriteOptions(), &batch);
   }
   ASSERT_TRUE(!s.ok());
@@ -227,7 +229,7 @@ TEST_F(CorruptionTest, NewFileErrorDuringWrite) {
 }
 
 TEST_F(CorruptionTest, TableFile) {
-  Build(100);
+  Build(100);   // 写100个 key-value对;
   DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
   dbi->TEST_CompactMemTable();
   dbi->TEST_CompactRange(0, nullptr, nullptr);
@@ -259,6 +261,8 @@ TEST_F(CorruptionTest, TableFileIndexData) {
   dbi->TEST_CompactMemTable();
 
   Corrupt(kTableFile, -2000, 500);
+  //Check(5000, 9999);
+  //fprintf(stderr, "reopen!\n");
   Reopen();
   Check(5000, 9999);
 }

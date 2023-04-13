@@ -285,6 +285,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   // Search level-0 in order from newest to oldest.
   std::vector<FileMetaData*> tmp;
   tmp.reserve(files_[0].size());
+  //fprintf(stderr, "file0 size: %zu\n", files_[0].size());
   for (uint32_t i = 0; i < files_[0].size(); i++) {
     FileMetaData* f = files_[0][i];
     if (ucmp->Compare(user_key, f->smallest.user_key()) >= 0 &&
@@ -292,7 +293,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
       tmp.push_back(f);
     }
   }
-  if (!tmp.empty()) {
+  if (!tmp.empty()) {    // 这里拿到所有level0中的key相同的文件;
     std::sort(tmp.begin(), tmp.end(), NewestFirst);
     for (uint32_t i = 0; i < tmp.size(); i++) {
       if (!(*func)(arg, 0, tmp[i])) {
@@ -300,6 +301,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
       }
     }
   }
+  //fprintf(stderr, "level0 size: %zu\n", tmp.size());
 
   // Search other levels.
   for (int level = 1; level < config::kNumLevels; level++) {
@@ -403,6 +405,7 @@ bool Version::UpdateStats(const GetStats& stats) {
   FileMetaData* f = stats.seek_file;
   if (f != nullptr) {
     f->allowed_seeks--;
+    // fprintf(stderr, "updatestats: file_num:%ld allowed_seeks: %ld \n", f->number, f->allowed_seeks);
     if (f->allowed_seeks <= 0 && file_to_compact_ == nullptr) {
       file_to_compact_ = f;
       file_to_compact_level_ = stats.seek_file_level;
@@ -443,6 +446,7 @@ bool Version::RecordReadSample(Slice internal_key) {
   // files. But what if we have a single file that contains many
   // overwrites and deletions?  Should we have another mechanism for
   // finding such files?
+  //fprintf(stderr, "matches: %zu\n", state.matches);
   if (state.matches >= 2) {
     // 1MB cost is about 1 seek (see comment in Builder::Apply).
     return UpdateStats(state.stats);
@@ -484,7 +488,9 @@ int Version::PickLevelForMemTableOutput(const Slice& smallest_user_key,
         // Check that file does not overlap too many grandparent bytes.
         GetOverlappingInputs(level + 2, &start, &limit, &overlaps);
         const int64_t sum = TotalFileSize(overlaps);
+        //fprintf(stderr, "overlap size: %ld overlap sum: %ld\n", overlaps.size(), sum);
         if (sum > MaxGrandParentOverlapBytes(vset_->options_)) {
+          //fprintf(stderr, "pickmemlevel break!\n");
           break;
         }
       }
@@ -1118,6 +1124,7 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
   uint64_t result = 0;
   for (int level = 0; level < config::kNumLevels; level++) {
     const std::vector<FileMetaData*>& files = v->files_[level];
+    //fprintf(stderr, "approximate: level%d size:%zu\n", level, files.size());
     for (size_t i = 0; i < files.size(); i++) {
       if (icmp_.Compare(files[i]->largest, ikey) <= 0) {
         // Entire file is before "ikey", so just add the file size

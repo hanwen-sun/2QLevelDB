@@ -555,14 +555,15 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
 
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
-  // fprintf(stderr, "CompactMemTable!\n");
+  ////////fprintf(stderr, "CompactMemTable!\n");
   assert(imm_ != nullptr);
-
+  
   // Save the contents of the memtable as a new Table
   VersionEdit edit;
   Version* base = versions_->current();
   base->Ref();
   Status s = WriteLevel0Table(imm_, &edit, base);
+  ////////fprintf(stderr, "write level0 done!\n");
   base->Unref();
 
   if (s.ok() && shutting_down_.load(std::memory_order_acquire)) {
@@ -578,7 +579,7 @@ void DBImpl::CompactMemTable() {
 
   if (s.ok()) {
     // Commit to the new state
-    imm_->Unref();
+    imm_->Unref();   // imm_在这里Unref被析构!
     imm_ = nullptr;
     has_imm_.store(false, std::memory_order_release);
     RemoveObsoleteFiles();
@@ -645,6 +646,7 @@ void DBImpl::TEST_CompactRange(int level, const Slice* begin,
 
 Status DBImpl::TEST_CompactMemTable() {
   // nullptr batch means just wait for earlier writes to be done
+  // ////////fprintf(stderr, "call test compactmemetable!\n");
   Status s = Write(WriteOptions(), nullptr);
   if (s.ok()) {
     // Wait until the compaction completes
@@ -678,6 +680,7 @@ void DBImpl::MaybeScheduleCompaction() {
   } else if (imm_ == nullptr && manual_compaction_ == nullptr &&
              !versions_->NeedsCompaction()) {
     // No work to be done
+    ////////fprintf(stderr, "do not need compaction!\n");
   } else {
     background_compaction_scheduled_ = true;
     env_->Schedule(&DBImpl::BGWork, this);
@@ -709,14 +712,14 @@ void DBImpl::BackgroundCall() {
 
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
-  // fprintf(stderr, "BackgroundCompaction!\n");
+  //////fprintf(stderr, "BackgroundCompaction!\n");
 
   if (imm_ != nullptr) {
     CompactMemTable();
     return;
   }
 
-  //fprintf(stderr, "go here!\n");
+  //////////fprintf(stderr, "!\n");
   Compaction* c;
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
@@ -735,15 +738,16 @@ void DBImpl::BackgroundCompaction() {
   } else {
     c = versions_->PickCompaction();
   }
-  // fprintf(stderr, "111\n");
+  // ////////fprintf(stderr, "111\n");
 
+  //////fprintf(stderr, "come here!\n");
   Status status;
   if (c == nullptr) {
     // Nothing to do
-    //fprintf(stderr, "nothing to do!\n");
+    //////fprintf(stderr, "nothing to do!\n");
   } else if (!is_manual && c->IsTrivialMove()) {   // 单纯移动level n的file 到level n + 1?
     // Move file to next level
-    // fprintf(stderr, "do this!\n");
+    //////fprintf(stderr, "do trivialmove!\n");
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
     c->edit()->RemoveFile(c->level(), f->number);
@@ -759,7 +763,7 @@ void DBImpl::BackgroundCompaction() {
         static_cast<unsigned long long>(f->file_size),
         status.ToString().c_str(), versions_->LevelSummary(&tmp));
   } else {
-    //fprintf(stderr, "do compactionwork!\n");
+    //////fprintf(stderr, "do compactionwork!\n");
     CompactionState* compact = new CompactionState(c);
     status = DoCompactionWork(compact);
     if (!status.ok()) {
@@ -904,7 +908,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
 }
 
 Status DBImpl::DoCompactionWork(CompactionState* compact) {
-  //fprintf(stderr, "DoCompactionWork!\n");
+  //////////fprintf(stderr, "DoCompactionWork!\n");
   const uint64_t start_micros = env_->NowMicros();
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
 
@@ -1099,6 +1103,7 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
   std::vector<Iterator*> list;
   list.push_back(mem_->NewIterator());
   mem_->Ref();
+  mem_->SetFlag();
   if (imm_ != nullptr) {
     list.push_back(imm_->NewIterator());
     imm_->Ref();
@@ -1143,7 +1148,10 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   MemTable* imm = imm_;
   Version* current = versions_->current();
   mem->Ref();
-  if (imm != nullptr) imm->Ref();
+  if (imm != nullptr) {
+    ////fprintf(stderr, "imm exist!\n");
+    imm->Ref();
+  }
   current->Ref();
 
   bool have_stat_update = false;
@@ -1156,16 +1164,20 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     LookupKey lkey(key, snapshot);
     if (mem->Get(lkey, value, &s)) {
       // Done
+      // //fprintf(stderr, "mem get!\n");
     } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
       // Done
+      // //fprintf(stderr, "imm get!\n");
     } else {
       s = current->Get(options, lkey, value, &stats);
+      // //fprintf(stderr, "sstable search!\n");
       have_stat_update = true;
     }
     mutex_.Lock();
   }
 
   if (have_stat_update && current->UpdateStats(stats)) {
+    ////////fprintf(stderr, "Seek Compaction!\n");
     MaybeScheduleCompaction();
   }
   mem->Unref();
@@ -1188,7 +1200,9 @@ Iterator* DBImpl::NewIterator(const ReadOptions& options) {
 
 void DBImpl::RecordReadSample(Slice key) {
   MutexLock l(&mutex_);
+  //////fprintf(stderr, "record sample begin!\n");
   if (versions_->current()->RecordReadSample(key)) {
+    //////fprintf(stderr,"record read sample!\n");
     MaybeScheduleCompaction();
   }
 }
@@ -1205,7 +1219,7 @@ void DBImpl::ReleaseSnapshot(const Snapshot* snapshot) {
 
 // Convenience methods
 Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
-  // fprintf(stderr, "DBImpl put!\n");
+  // ////////fprintf(stderr, "DBImpl put!\n");
   return DB::Put(o, key, val);
 }
 
@@ -1223,16 +1237,18 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   // May temporarily unlock and wait.
   
   writers_.push_back(&w);
-  while (!w.done && &w != writers_.front()) {
+  while (!w.done && &w != writers_.front()) {   // 该writer当前是第一个或者已被其他线程完成, 都继续;
     w.cv.Wait();
   }
   if (w.done) {
     return w.status;
   }
-  timer_->Start();
-  Status status = MakeRoomForWrite(updates == nullptr);
-  uint64_t wait_elapsed = timer_->End();
-  monitor_->Report(WAIT_IMM, wait_elapsed);
+  //timer_->Start();
+  // ////////fprintf(stderr, "begin makeroon!\n");
+  Status status = MakeRoomForWrite(updates == nullptr, options);
+  // ////////fprintf(stderr, "makeroom done!\n");
+  //uint64_t wait_elapsed = timer_->End();
+  //monitor_->Report(WAIT_IMM, wait_elapsed);
 
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
@@ -1247,7 +1263,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     {
       mutex_.Unlock();
-      timer_->Start();
+      //timer_->Start();
       status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
       bool sync_error = false;
       if (status.ok() && options.sync) {
@@ -1256,14 +1272,16 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
           sync_error = true;
         }
       }
-      uint64_t log_elapsed = timer_->End();
-      // fprintf(stderr, "LOG_ELAPSED: %zu\n", log_elapsed);
-      monitor_->Report(WRITE_LOG, log_elapsed);
+      // ////////fprintf(stderr, "log operation done!\n");
+      //uint64_t log_elapsed = timer_->End();
+      // ////////fprintf(stderr, "LOG_ELAPSED: %zu\n", log_elapsed);
+      //monitor_->Report(WRITE_LOG, log_elapsed);
       if (status.ok()) {
-        timer_->Start();
+        //timer_->Start();
         status = WriteBatchInternal::InsertInto(write_batch, mem_);
-        uint64_t mem_elapsed = timer_->End();
-        monitor_->Report(INSERT_MEM, mem_elapsed);
+        //uint64_t mem_elapsed = timer_->End();
+        //monitor_->Report(INSERT_MEM, mem_elapsed);
+        // ////////fprintf(stderr, "Insert done!\n");
       }
       mutex_.Lock();
       if (sync_error) {
@@ -1293,6 +1311,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   if (!writers_.empty()) {
     writers_.front()->cv.Signal();
   }
+  // ////////fprintf(stderr, "write done!\n");
 
   return status;
 }
@@ -1347,9 +1366,76 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   return result;
 }
 
+// create new mem_ and write hot data!
+Status DBImpl::WriteHotData(std::vector<ParsedNormalKey>& hot_data, const WriteOptions& options) {
+    mutex_.AssertHeld();
+    ////////fprintf(stderr, "write hot data!\n");
+    Status s;
+    mem_ = new MemTable(internal_comparator_, size_t(options_.write_buffer_size * options_.hot_factor));
+    mem_->Ref();
+    //////////fprintf(stderr, "go here!\n");
+    if(hot_data.empty())
+      return s;
+    
+    uint64_t last_sequence = versions_->LastSequence();
+    WriteBatch write_batch;
+    WriteBatchInternal::SetSequence(&write_batch, last_sequence + 1);  // 这里要+1吗?
+        // ////////fprintf(stderr, "go here!\n");
+        // ////////fprintf(stderr, "hot_data size: %zu\n", hot_data.size());
+    for(const auto &it : hot_data) {    // 在这里调用Write将hot_data批量插入;
+          //////////fprintf(stderr, "1\n");
+          //////////fprintf(stderr, "hot_key: %s\n type: %d\n", it.user_key.ToString().c_str(), it.type);
+        if(it.type)
+          write_batch.Put(it.user_key, it.value);
+        else
+          write_batch.Delete(it.user_key);
+      }
+    // ////////fprintf(stderr, "build batch done!\n");
+    last_sequence += WriteBatchInternal::Count(&write_batch);
+      // ////////fprintf(stderr, "go here!\n");
+    {
+      mutex_.Unlock();
+      //timer_->Start();
+      s = log_->AddRecord(WriteBatchInternal::Contents(&write_batch));
+      bool sync_error = false;
+      if (s.ok() && options.sync) {
+        s = logfile_->Sync();
+        if (!s.ok()) {
+          sync_error = true;
+        }
+      } 
+
+      // ////////fprintf(stderr, "log write done!\n");
+      //uint64_t log_elapsed = timer_->End();
+      // ////////fprintf(stderr, "LOG_ELAPSED: %zu\n", log_elapsed);
+      //monitor_->Report(WRITE_LOG, log_elapsed);
+      if (s.ok()) {
+        //timer_->Start();
+        s = WriteBatchInternal::InsertInto(&write_batch, mem_);
+        //uint64_t mem_elapsed = timer_->End();
+        //monitor_->Report(INSERT_MEM, mem_elapsed);
+      }
+      ////////fprintf(stderr, "mem insert done!\n");
+      mutex_.Lock();
+      if (sync_error) {
+        // The state of the log file is indeterminate: the log record we
+        // just added may or may not show up when the DB is re-opened.
+        // So we force the DB into a mode where all future writes fail.
+        RecordBackgroundError(s);
+        }
+      }
+      if (&write_batch == tmp_batch_) tmp_batch_->Clear();
+     
+      versions_->SetLastSequence(last_sequence);
+        //////////fprintf(stderr, "no cold data done!\n");
+
+      ////////fprintf(stderr, "write hot data done!\n");
+      return s; 
+}
+
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
-Status DBImpl::MakeRoomForWrite(bool force) {
+Status DBImpl::MakeRoomForWrite(bool force, const WriteOptions& options) {   // 如果write(options, nullptr) 则代表强制flush;
   mutex_.AssertHeld();
   assert(!writers_.empty());
   bool allow_delay = !force;
@@ -1386,7 +1472,33 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       background_work_finished_signal_.Wait();
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
+      ////////fprintf(stderr, "switch new memtable!\n");
       assert(versions_->PrevLogNumber() == 0);
+      // 这里是要转变mem为imm
+      // 1. 提取热数据存入vector中;
+      // 2. 调用Seperate, 删除热数据与废弃数据指针, 判断是否可以将冷数据flush;
+      // 3. 如果不可以, 则Unref()该mem
+      // 4. 如果可以, 将mem的值赋给Imm, Imm flush后统一析构;
+      // 5. 将Vector中保存的数据插入writebatch中; (注意分辨是put和delete!!)
+      
+      // key, Value, Optype;
+      std::vector<ParsedNormalKey> hot_data;
+      mem_->ExtractHot(hot_data);
+      ////fprintf(stderr, "hot_data size: %zu\n", hot_data.size());
+      bool Flag = mem_->GetFlag();
+      //fprintf(stderr, "seperate flag: %d\n", Flag);
+
+      if(!force && !Flag) {
+        if(!mem_->Seperate()) {    // 创建新memtable, 不涉及flush!
+        ////fprintf(stderr, "there's no cold data!\n");
+        //////////fprintf(stderr, "call unref!\n");
+        mem_->Unref();
+        s = WriteHotData(hot_data, options);
+        return s;
+        }
+      }
+      
+
       uint64_t new_log_number = versions_->NewFileNumber();
       WritableFile* lfile = nullptr;
       s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
@@ -1401,9 +1513,19 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       logfile_number_ = new_log_number;
       log_ = new log::Writer(lfile);
       imm_ = mem_;
+      ////fprintf(stderr, "imm_ assignment!\n");
+      
       has_imm_.store(true, std::memory_order_release);
-      mem_ = new MemTable(internal_comparator_, size_t(options_.write_buffer_size * options_.hot_factor));
-      mem_->Ref();
+      //mem_ = new MemTable(internal_comparator_, size_t(options_.write_buffer_size * options_.hot_factor));
+      //mem_->Ref();
+      if(!force && !Flag) {
+        WriteHotData(hot_data, options);
+      }
+      else {
+        mem_ = new MemTable(internal_comparator_, size_t(options_.write_buffer_size * options_.hot_factor));
+        mem_->Ref();
+      }
+
       force = false;  // Do not force another compaction if have room
       MaybeScheduleCompaction();
     }
@@ -1492,7 +1614,7 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
 }
 
 void DBImpl::GenReport() {   // 特别注意这里不要与DBImpl的方法重名, 否则循环调用, segmentation fault!
-  //fprintf(stderr, "DB GenReport!\n");
+  //////////fprintf(stderr, "DB GenReport!\n");
   monitor_->GenerateReport();
 }
 
@@ -1500,7 +1622,7 @@ void DBImpl::GenReport() {   // 特别注意这里不要与DBImpl的方法重名
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
-  //fprintf(stderr, "DB::Put!\n");
+  //////////fprintf(stderr, "DB::Put!\n");
   WriteBatch batch;
   batch.Put(key, value);
   return Write(opt, &batch);
@@ -1515,7 +1637,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 DB::~DB() = default;
 
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
-  //fprintf(stderr, "levldb open!\n");
+  //////////fprintf(stderr, "levldb open!\n");
   *dbptr = nullptr;
 
   DBImpl* impl = new DBImpl(options, dbname);

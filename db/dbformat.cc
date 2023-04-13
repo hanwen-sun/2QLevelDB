@@ -30,6 +30,13 @@ std::string ParsedInternalKey::DebugString() const {
   return ss.str();
 }
 
+std::string ParsedNormalKey::DebugString() const {
+  std::ostringstream ss;
+  ss << '\'' << EscapeString(user_key.ToString()) << "' @ " << sequence << " : "
+     << static_cast<int>(type) << " : " << EscapeString(value.ToString());
+  return ss.str();
+}
+
 std::string InternalKey::DebugString() const {
   ParsedInternalKey parsed;
   if (ParseInternalKey(rep_, &parsed)) {

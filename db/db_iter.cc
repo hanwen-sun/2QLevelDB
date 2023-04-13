@@ -21,9 +21,9 @@ static void DumpInternalIter(Iterator* iter) {
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
     ParsedInternalKey k;
     if (!ParseInternalKey(iter->key(), &k)) {
-      std::fprintf(stderr, "Corrupt '%s'\n", EscapeString(iter->key()).c_str());
+      std:://fprintf(stderr, "Corrupt '%s'\n", EscapeString(iter->key()).c_str());
     } else {
-      std::fprintf(stderr, "@ '%s'\n", k.DebugString().c_str());
+      std:://fprintf(stderr, "@ '%s'\n", k.DebugString().c_str());
     }
   }
 }
@@ -119,11 +119,14 @@ class DBIter : public Iterator {
   size_t bytes_until_read_sampling_;
 };
 
-inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
+inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {   
+  // //fprintf(stderr, "parse key!\n");
   Slice k = iter_->key();
 
   size_t bytes_read = k.size() + iter_->value().size();
+  // //fprintf(stderr, "%zu %zu\n", bytes_until_read_sampling_, bytes_read);
   while (bytes_until_read_sampling_ < bytes_read) {
+    ////fprintf(stderr, "%zu %zu\n", bytes_until_read_sampling_, bytes_read);
     bytes_until_read_sampling_ += RandomCompactionPeriod();
     db_->RecordReadSample(k);
   }
@@ -180,6 +183,7 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
   assert(direction_ == kForward);
   do {
     ParsedInternalKey ikey;
+    // fprintf(stderr, "ikey sequence: %zu DBIterator sequence: %zu\n", ikey.sequence, sequence_);
     if (ParseKey(&ikey) && ikey.sequence <= sequence_) {
       switch (ikey.type) {
         case kTypeDeletion:
@@ -290,14 +294,18 @@ void DBIter::Seek(const Slice& target) {
 }
 
 void DBIter::SeekToFirst() {
+  //fprintf(stderr, "DBIter SeekToFirst!\n");
   direction_ = kForward;
   ClearSavedValue();
-  iter_->SeekToFirst();
+  iter_->SeekToFirst();  
   if (iter_->Valid()) {
+    //fprintf(stderr, "valid!\n");
     FindNextUserEntry(false, &saved_key_ /* temporary storage */);
   } else {
     valid_ = false;
   }
+
+  //fprintf(stderr, "DBIter SeekToEnd!\n");
 }
 
 void DBIter::SeekToLast() {
@@ -312,6 +320,7 @@ void DBIter::SeekToLast() {
 Iterator* NewDBIterator(DBImpl* db, const Comparator* user_key_comparator,
                         Iterator* internal_iter, SequenceNumber sequence,
                         uint32_t seed) {
+  //fprintf(stderr, "DBIterator Construct! sequence num: %zu\n", sequence);
   return new DBIter(db, user_key_comparator, internal_iter, sequence, seed);
 }
 

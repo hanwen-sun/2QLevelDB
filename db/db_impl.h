@@ -137,7 +137,9 @@ class DBImpl : public DB {
   Status WriteLevel0Table(MemTable* mem, VersionEdit* edit, Version* base)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  Status MakeRoomForWrite(bool force /* compact even if there is room? */)
+  Status WriteHotData(std::vector<ParsedNormalKey>& hot_data, const WriteOptions& options);
+
+  Status MakeRoomForWrite(bool force /* compact even if there is room? */, const WriteOptions& options)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   WriteBatch* BuildBatchGroup(Writer** last_writer)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);

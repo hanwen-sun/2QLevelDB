@@ -325,6 +325,7 @@ class DBTest : public testing::Test {
     ReadOptions options;
     options.snapshot = snapshot;
     std::string result;
+    //fprintf(stderr, "begin get!\n");
     Status s = db_->Get(options, k, &result);
     if (s.IsNotFound()) {
       result = "NOT_FOUND";
@@ -596,15 +597,18 @@ TEST_F(DBTest, GetFromImmutableLayer) {
 
     ASSERT_LEVELDB_OK(Put("foo", "v1"));
     ASSERT_EQ("v1", Get("foo"));
-
+    // fprintf(stderr, "test1 done!\n");
     // Block sync calls.
     // fprintf(stderr, "%s\n", "go here!");
     env_->delay_data_sync_.store(true, std::memory_order_release);
-    // fprintf(stderr, "%s\n", "store error!");
+    // fprintf(stderr, "fill memtable!\n");
+
     Put("k1", std::string(100000, 'x'));  // Fill memtable.
-    // fprintf(stderr, "%d\n", 1);
+
+    // fprintf(stderr, "trigger compaction!\n");
     Put("k2", std::string(100000, 'y'));  // Trigger compaction.
     // fprintf(stderr, "%s\n", "put done!");
+    // fprintf(stderr, "get foo!\n");
     ASSERT_EQ("v1", Get("foo"));
     // Release sync calls.
     env_->delay_data_sync_.store(false, std::memory_order_release);
@@ -1300,6 +1304,9 @@ TEST_F(DBTest, ApproximateSizes_MixOfSmallAndLarge) {
 }
 
 TEST_F(DBTest, IteratorPinsRef) {
+  // 这里调用db_的NewIterator --> db_iter->NewIterator();
+  // 根据当前的last_sequence创建迭代器;
+  // 注意这里可能会因为WriteHot造成Sequence的改变, 从而造成Iterator的不准;
   Put("foo", "hello");
 
   // Get iterator that will yield the current contents of the DB.
@@ -1766,12 +1773,13 @@ TEST_F(DBTest, NonWritableFileSystem) {
   Options options = CurrentOptions();
   options.write_buffer_size = 1000;
   options.env = env_;
-  Reopen(&options);
+  Reopen(&options);      // 以当前的options打开数据库;
   ASSERT_LEVELDB_OK(Put("foo", "v1"));
   // Force errors for new files.
   env_->non_writable_.store(true, std::memory_order_release);
   std::string big(100000, 'x');
   int errors = 0;
+  //fprintf(stderr, "go in loop!\n");
   for (int i = 0; i < 20; i++) {
     std::fprintf(stderr, "iter %d; errors %d\n", i, errors);
     if (!Put("foo", big).ok()) {
