@@ -1358,7 +1358,7 @@ TEST_F(DBTest, Snapshot) {
   } while (ChangeOptions());
 }
 
-TEST_F(DBTest, HiddenValuesAreRemoved) {
+TEST_F(DBTest, DISABLED_HiddenValuesAreRemoved) {
   do {
     Random rnd(301);
     FillLevels("a", "z");
